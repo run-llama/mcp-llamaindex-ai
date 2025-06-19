@@ -9,14 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@auth/core": "^0.39.1",
+    "@auth/prisma-adapter": "^2.9.1",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "@prisma/client": "^6.10.1",
+    "next": "15.3.4",
+    "next-auth": "^5.0.0-beta.28",
+    "prisma": "^6.10.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "next": "15.3.4"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^19",
-    "@types/react-dom": "^19"
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.10",
+    "typescript": "^5"
   }
 }
