@@ -8,19 +8,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model mcp_users {
-  email  String @id(map: "mcp_users_pk") @db.VarChar
-  config Json?  @db.Json
-}
-
-model users {
-  email            String  @unique(map: "users_email_idx") @db.VarChar
-  twitter_token    String? @db.VarChar
-  linkedin_token   String? @db.VarChar
-  bluesky_token    String? @db.VarChar
-  mastodon_token   String? @db.VarChar
-  linkedin_company String? @db.VarChar
-  utm_rules        Json?   @db.Json
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  clients       Client[]
+  accessTokens  AccessToken[]
+  authCodes     AuthCode[]
 }
 
 model Account {
@@ -29,13 +27,13 @@ model Account {
   type               String
   provider           String
   providerAccountId  String
-  refresh_token      String?  @db.Text
-  access_token       String?  @db.Text
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
   expires_at         Int?
-  token_type        String?
-  scope             String?
-  id_token          String?  @db.Text
-  session_state     String?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -50,47 +48,50 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  clients       OAuthClient[]
-}
-
 model VerificationToken {
   identifier String
-  token      String   @unique
+  token      String
   expires    DateTime
 
   @@unique([identifier, token])
 }
 
-model OAuthClient {
+model Client {
   id           String   @id @default(cuid())
-  clientId     String   @unique
+  clientId     String   @unique @default(cuid())
   clientSecret String
   name         String
-  description  String?
   redirectUris String[]
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  tokens       OAuthToken[]
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessTokens AccessToken[]
+  authCodes    AuthCode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model OAuthToken {
-  id            String      @id @default(cuid())
-  accessToken   String      @unique
-  refreshToken  String?     @unique
-  clientId      String
-  client        OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  expiresAt     DateTime
-  scope         String[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+model AccessToken {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  expiresAt   DateTime
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model AuthCode {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  expiresAt  DateTime
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redirectUri String
+
+  createdAt DateTime @default(now())
 }

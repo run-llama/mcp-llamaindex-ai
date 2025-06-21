@@ -13,6 +13,7 @@
     "@auth/prisma-adapter": "^2.9.1",
     "@modelcontextprotocol/sdk": "^1.13.0",
     "@prisma/client": "^6.10.1",
+    "crypto": "^1.0.1",
     "next": "15.3.4",
     "next-auth": "^5.0.0-beta.28",
     "prisma": "^6.10.1",
