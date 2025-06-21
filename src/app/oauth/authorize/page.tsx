@@ -11,10 +11,12 @@ export default async function AuthorizePage({
 }) {
   const session = await auth();
 
-  const clientId = searchParams.client_id as string;
-  const redirectUri = searchParams.redirect_uri as string;
-  const responseType = searchParams.response_type as string;
-  const state = searchParams.state as string;
+  const params = await searchParams;
+
+  const clientId = params.client_id as string;
+  const redirectUri = params.redirect_uri as string;
+  const responseType = params.response_type as string;
+  const state = params.state as string;
 
   if (!session || !session.user || !session.user.id) {
     const headersList = headers();
@@ -26,7 +28,7 @@ export default async function AuthorizePage({
     const callbackUrl = new URL('/oauth/authorize', baseUrl);
 
     // Add all current search params to the callback URL
-    Object.entries(searchParams).forEach(([key, value]) => {
+    Object.entries(params).forEach(([key, value]) => {
       if (typeof value === 'string') {
         callbackUrl.searchParams.set(key, value);
       }

@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     version: MCP_SERVER_INFO.version,
     description: "MCP server with OAuth 2.0 authentication",
     endpoints: {
-      mcp: `${baseUrl}/api/sse`,
+      mcp: `${baseUrl}/sse`,
       oauth: {
         register: `${baseUrl}/api/oauth/register`,
         token: `${baseUrl}/api/oauth/token`
