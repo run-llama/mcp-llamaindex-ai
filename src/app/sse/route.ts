@@ -190,12 +190,32 @@ async function handleJsonRpcRequest(request: NextRequest) {
         return new NextResponse(null, { status: 200 });
 
       case 'tools/list':
-        console.log('[MCP] Processing tools/list method');
+        console.log('[MCP] Processing A method');
         return NextResponse.json({
           jsonrpc: "2.0",
           id: body.id,
           result: {
             tools: AVAILABLE_TOOLS
+          }
+        });
+
+      case 'resources/list':
+        console.log('[MCP] Processing resources/list method');
+        return NextResponse.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            resources: []
+          }
+        });
+
+      case 'prompts/list':
+        console.log('[MCP] Processing prompts/list method');
+        return NextResponse.json({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: {
+            prompts: []
           }
         });
 

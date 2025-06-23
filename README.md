@@ -24,7 +24,7 @@ Add this to your mcp.json:
 
 ### [VSCode](https://code.visualstudio.com/)
 
-For some reason, VSCode doesn't send the `client_secret` parameter in the token request, so auth fails.
+For some reason, VSCode doesn't send the `client_secret` parameter in the token request, so auth fails. Additionally, VSCode [doesn't properly evict the client ID](https://github.com/microsoft/vscode/issues/250960), so client registration fails.
 
 ### [Claude Desktop](https://www.anthropic.com/products/claude-desktop)
 
