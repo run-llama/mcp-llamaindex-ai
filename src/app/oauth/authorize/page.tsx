@@ -17,6 +17,8 @@ export default async function AuthorizePage({
   const redirectUri = params.redirect_uri as string;
   const responseType = params.response_type as string;
   const state = params.state as string;
+  const code_challenge = params.code_challenge as string | undefined;
+  const code_challenge_method = params.code_challenge_method as string | undefined;
 
   if (!session || !session.user || !session.user.id) {
     const headersList = headers();
@@ -98,6 +100,8 @@ export default async function AuthorizePage({
         clientId: client.id,
         userId: session.user.id,
         redirectUri: redirectUri,
+        codeChallenge: code_challenge,
+        codeChallengeMethod: code_challenge_method,
       },
     });
 

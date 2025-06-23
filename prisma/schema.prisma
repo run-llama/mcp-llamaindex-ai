@@ -92,6 +92,8 @@ model AuthCode {
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   redirectUri String
+  codeChallenge String?
+  codeChallengeMethod String?
 
   createdAt DateTime @default(now())
 }
