@@ -50,10 +50,12 @@ npm run dev
 
 Required environment variables in `.env`: (not `.env.local` because Prisma doesn't support it)
 
+```
 DATABASE_URL="postgresql://user:pass@server/database"
 AUTH_SECRET=any random string
 GOOGLE_CLIENT_ID=a Google OAuth client ID
 GOOGLE_CLIENT_SECRET=a Google OAuth client secret
+```
 
 ## Architecture
 
