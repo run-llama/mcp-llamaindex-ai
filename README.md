@@ -24,11 +24,21 @@ Add this to your mcp.json:
 
 ### [VSCode](https://code.visualstudio.com/)
 
-For some reason, VSCode doesn't send the `client_secret` parameter in the token request, so auth fails. Additionally, VSCode [doesn't properly evict the client ID](https://github.com/microsoft/vscode/issues/250960), so client registration fails.
+VSCode [doesn't properly evict the client ID](https://github.com/microsoft/vscode/issues/250960), so client registration fails if you accidentally delete the client. Otherwise, it works fine. Add this to your settings.json:
 
-### [Claude Desktop](https://www.anthropic.com/products/claude-desktop)
+```
+"mcp": {
+    "servers": {
+        "My Server": {
+            "url": "http://localhost:3000/sse"
+        }
+    }
+}
+```
 
-Claude Desktop doesn't support arbitrary URLs as MCP servers, so you can't use it with this server.
+### [Claude Desktop](https://www.anthropic.com/products/claude-desktop) and [Claude.ai](https://claude.ai)
+
+Use the "Connect Apps" button and select "Add Integration". Provide the URL of your server. This may give you trouble if it's localhost but works as a remote server.
 
 ## Running the server
 
