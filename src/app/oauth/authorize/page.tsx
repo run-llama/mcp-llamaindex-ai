@@ -21,7 +21,7 @@ export default async function AuthorizePage({
   const code_challenge_method = params.code_challenge_method as string | undefined;
 
   if (!session || !session.user || !session.user.id) {
-    const headersList = headers();
+    const headersList = await headers();
     const host = headersList.get('host');
     const prot = process.env.NODE_ENV === 'production' ? 'https' : 'http';
     const baseUrl = `${prot}://${host}`;
@@ -77,6 +77,8 @@ export default async function AuthorizePage({
       // This should not be reachable if the user sees the consent screen
       throw new Error('No session found during consent handling.');
     }
+
+    if (!client) throw new Error('Client not found during consent handling.');
 
     const consent = formData.get('consent');
 
