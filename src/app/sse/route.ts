@@ -200,6 +200,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
+            protocolVersion: "2024-11-05",
             resources: []
           }
         });
@@ -210,6 +211,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
+            protocolVersion: "2024-11-05",
             prompts: []
           }
         });
@@ -243,6 +245,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
             jsonrpc: "2.0",
             id: body.id,
             result: {
+              protocolVersion: "2024-11-05",
               content: [
                 {
                   type: "text",
