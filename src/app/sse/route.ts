@@ -86,6 +86,8 @@ async function authenticateRequest(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   console.log('[MCP GET] Request received');
+
+  console.log('[MCP GET] Full request path:', request.nextUrl.pathname);
   
   // For GET requests, return server information for discovery
   const baseUrl = process.env.NEXTAUTH_URL || 
