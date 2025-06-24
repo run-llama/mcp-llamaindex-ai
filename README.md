@@ -1,44 +1,50 @@
-# OAuth 2.1 MCP Server as a Next.js app
+# OAuth 2.1 MCP Server as a Next.js app on Vercel
 
-This is a Next.js-based application that provides an MCP (Model Context Protocol) server with OAuth 2.1 authentication support. It is intended as a model for building your own MCP server in a Next.js context.
+This is a Next.js-based application that provides an MCP (Model Context Protocol) server with OAuth 2.1 authentication support. It is intended as a model for building your own MCP server in a Next.js context. It uses the [@vercel/mcp-adapter](https://github.com/vercel/mcp-adapter) to handle the MCP protocol, in order to support both SSE and Streamable HTTP transports.
 
 In addition to being an OAuth server, it also requires the user authenticate. This is currently configured to use Google as a provider, but you could authenticate users however you want (X, GitHub, your own user/password database etc.) without breaking the OAuth flow.
 
 ## Using with
 
-### [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)
+### [Claude Desktop](https://www.anthropic.com/products/claude-desktop) and [Claude.ai](https://claude.ai)
 
-Tell Inspector to connect to `http://localhost:3000/sse`, with Streamable HTTP transport.
+Claude currently supports only the older SSE transport, so you need to give it a different URL to all the other clients listed here. 
+
+Use the "Connect Apps" button and select "Add Integration". Provide the URL like `https://example.com/mcp/sse` (the `/sse` at the end is important!). Note that Claude Desktop and Web will not accept a `localhost` URL.
 
 ### [Cursor](https://cursor.com/)
 
-Add this to your mcp.json:
+Edit your `mcp.json` to look like this:
 
 ```
-"my_server": {
-  "name": "My Server",
-  "url": "http://localhost:3000/sse",
-  "transport": "sse"
+{
+  "mcpServers": {
+      "MyServer": {
+        "name": "LlamaIndex MCP Demo",
+        "url": "https://example.com/mcp/mcp",
+        "transport": "http-stream"
+      },
+  }
 }
 ```
 
 ### [VSCode](https://code.visualstudio.com/)
 
-VSCode [doesn't properly evict the client ID](https://github.com/microsoft/vscode/issues/250960), so client registration fails if you accidentally delete the client (the workaround in that issue will resolve it). Otherwise, it works fine. Add this to your settings.json:
+VSCode currently [doesn't properly evict the client ID](https://github.com/microsoft/vscode/issues/250960), so client registration fails if you accidentally delete the client (the workaround in that issue will resolve it). Otherwise, it works fine. Add this to your settings.json:
 
 ```
 "mcp": {
     "servers": {
         "My Server": {
-            "url": "http://localhost:3000/sse"
+            "url": "https://example.com/mcp/mcp"
         }
     }
 }
 ```
 
-### [Claude Desktop](https://www.anthropic.com/products/claude-desktop) and [Claude.ai](https://claude.ai)
+### [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)
 
-Use the "Connect Apps" button and select "Add Integration". Provide the URL of your server. This may give you trouble if it's localhost but works as a remote server.
+Tell Inspector to connect to `https://example.com/mcp/mcp`, with Streamable HTTP transport. You can also use the SSE transport by connecting to `https://example.com/mcp/sse` instead.
 
 ## Running the server
 
@@ -48,14 +54,21 @@ prisma generate
 npm run dev
 ```
 
-Required environment variables in `.env`: (not `.env.local` because Prisma doesn't support it)
+### Environment variables
+
+Required environment variables should be in `.env`: (not `.env.local` because Prisma doesn't support it)
 
 ```
 DATABASE_URL="postgresql://user:pass@server/database"
-AUTH_SECRET=any random string
-GOOGLE_CLIENT_ID=a Google OAuth client ID
-GOOGLE_CLIENT_SECRET=a Google OAuth client secret
+AUTH_SECRET="any random string"
+GOOGLE_CLIENT_ID="a Google OAuth client ID"
+GOOGLE_CLIENT_SECRET="a Google OAuth client secret"
+REDIS_URL="rediss://user:pass@host:6379"
 ```
+
+`DATABASE_URL` is required for OAuth authentication to work, this is where sessions etc. live.
+
+`REDIS_URL` is required if you need SSE transport to work (i.e. you want to support Claude Desktop and Web).
 
 ## Architecture
 
@@ -72,4 +85,6 @@ You'll also notice:
 
 ## Deploying to production
 
-This app works deployed to Vercel, but you'll need to add `prisma generate` to your build command, and of course you'll need all the same environment variables as in the development environment.
+This app only works if deployed to Vercel currently, due to its dependence on the `@vercel/mcp-adapter` package, which in turn is required to support the old SSE transport. We didn't feel like implementing a whole extra protocol just for Claude Desktop.
+
+Deploy as usual. You'll need to add `prisma generate` to your build command, and of course you'll need all the same environment variables as in the development environment.
