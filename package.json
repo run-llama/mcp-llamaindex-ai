@@ -11,8 +11,9 @@
   "dependencies": {
     "@auth/core": "^0.39.1",
     "@auth/prisma-adapter": "^2.9.1",
-    "@modelcontextprotocol/sdk": "^1.13.0",
+    "@modelcontextprotocol/sdk": "^1.13.1",
     "@prisma/client": "^6.10.1",
+    "@vercel/mcp-adapter": "^0.11.1",
     "crypto": "^1.0.1",
     "next": "15.3.4",
     "next-auth": "^5.0.0-beta.28",
