@@ -177,7 +177,10 @@ async function handleJsonRpcRequest(request: NextRequest) {
           id: body.id,
           result: {
             protocolVersion: "2024-11-05",
-            capabilities: MCP_SERVER_INFO.capabilities,
+            capabilities: {
+              ...MCP_SERVER_INFO.capabilities,
+              tools: AVAILABLE_TOOLS
+            },
             serverInfo: {
               name: MCP_SERVER_INFO.name,
               version: MCP_SERVER_INFO.version
@@ -190,7 +193,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
         return new NextResponse(null, { status: 200 });
 
       case 'tools/list':
-        console.log('[MCP] Processing A method');
+        console.log('[MCP] Processing tools/list method');
         return NextResponse.json({
           jsonrpc: "2.0",
           id: body.id,
