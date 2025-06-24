@@ -7,8 +7,18 @@ const MCP_SERVER_INFO = {
   name: "MCP OAuth Server",
   version: "0.1.0",
   capabilities: {
-    tools: {}
-  }
+    "logging": {},
+    "prompts": {
+      "listChanged": true
+    },
+    "resources": {
+      "subscribe": true,
+      "listChanged": true
+    },
+    "tools": {
+      "listChanged": true
+    }
+  },
 };
 
 // Available tools
@@ -176,13 +186,8 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2024-11-05",
-            capabilities: {
-              ...MCP_SERVER_INFO.capabilities,
-              tools: {
-                listChanged: true
-              }
-            },
+            protocolVersion: "2025-03-26",
+            capabilities: MCP_SERVER_INFO.capabilities,
             serverInfo: {
               name: MCP_SERVER_INFO.name,
               version: MCP_SERVER_INFO.version
@@ -319,7 +324,7 @@ async function handleSseConnection(request: NextRequest) {
           jsonrpc: "2.0",
           method: "server/capabilities",
           params: {
-            protocolVersion: "2024-11-05",
+            protocolVersion: "2025-03-26",
             capabilities: MCP_SERVER_INFO.capabilities,
             serverInfo: {
               name: MCP_SERVER_INFO.name,
