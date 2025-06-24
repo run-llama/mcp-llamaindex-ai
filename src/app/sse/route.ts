@@ -179,7 +179,9 @@ async function handleJsonRpcRequest(request: NextRequest) {
             protocolVersion: "2024-11-05",
             capabilities: {
               ...MCP_SERVER_INFO.capabilities,
-              tools: AVAILABLE_TOOLS
+              tools: {
+                listChanged: true
+              }
             },
             serverInfo: {
               name: MCP_SERVER_INFO.name,
