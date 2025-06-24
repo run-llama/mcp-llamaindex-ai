@@ -4,10 +4,9 @@ import { prisma } from '@/app/prisma';
 
 // MCP Server capabilities and configuration
 const MCP_SERVER_INFO = {
-  name: "MCP OAuth Server",
-  version: "0.1.0",
+  name: "LlamaIndex MCP Server",
+  version: "1.0.0",
   capabilities: {
-    "logging": {},
     "prompts": {
       "listChanged": true
     },
@@ -189,7 +188,6 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2024-11-05",
             tools: AVAILABLE_TOOLS
           }
         });
@@ -200,7 +198,6 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2024-11-05",
             resources: []
           }
         });
@@ -211,7 +208,6 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2024-11-05",
             prompts: []
           }
         });
@@ -245,7 +241,6 @@ async function handleJsonRpcRequest(request: NextRequest) {
             jsonrpc: "2.0",
             id: body.id,
             result: {
-              protocolVersion: "2024-11-05",
               content: [
                 {
                   type: "text",
