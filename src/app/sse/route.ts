@@ -84,27 +84,6 @@ async function authenticateRequest(request: NextRequest) {
   }
 }
 
-// JSON-RPC error response helper
-function createErrorResponse(id: any, code: number, message: string) {
-  return NextResponse.json({
-    jsonrpc: "2.0",
-    error: {
-      code,
-      message
-    },
-    id
-  }, { status: 400 });
-}
-
-// JSON-RPC success response helper
-function createSuccessResponse(id: any, result: any) {
-  return NextResponse.json({
-    jsonrpc: "2.0",
-    id,
-    result
-  });
-}
-
 export async function GET(request: NextRequest) {
   console.log('[MCP GET] Request received');
   
@@ -143,8 +122,11 @@ export async function POST(request: NextRequest) {
     // Handle JSON-RPC request
     return handleJsonRpcRequest(request);
   } else {
+    console.log('[MCP] NOT handling SEE requests');
     // Handle SSE connection
-    return handleSseConnection(request);
+    //return handleSseConnection(request);
+    const response = NextResponse.json({ error: 'Not implemented' }, { status: 501 });
+    return response;
   }
 }
 
@@ -186,7 +168,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
-            protocolVersion: "2025-03-26",
+            protocolVersion: "2024-11-05",
             capabilities: MCP_SERVER_INFO.capabilities,
             serverInfo: {
               name: MCP_SERVER_INFO.name,
@@ -205,6 +187,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
           jsonrpc: "2.0",
           id: body.id,
           result: {
+            protocolVersion: "2024-11-05",
             tools: AVAILABLE_TOOLS
           }
         });
@@ -291,6 +274,7 @@ async function handleJsonRpcRequest(request: NextRequest) {
   }
 }
 
+/*
 async function handleSseConnection(request: NextRequest) {
   console.log('[MCP] Handling SSE connection');
   
@@ -324,7 +308,7 @@ async function handleSseConnection(request: NextRequest) {
           jsonrpc: "2.0",
           method: "server/capabilities",
           params: {
-            protocolVersion: "2025-03-26",
+            protocolVersion: "2024-11-05",
             capabilities: MCP_SERVER_INFO.capabilities,
             serverInfo: {
               name: MCP_SERVER_INFO.name,
@@ -379,6 +363,7 @@ async function handleSseConnection(request: NextRequest) {
     return NextResponse.json({ error: 'Error creating SSE stream' }, { status: 500 });
   }
 }
+*/
 
 export async function OPTIONS(request: NextRequest) {
   // Handle CORS preflight requests
