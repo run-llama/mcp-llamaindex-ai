@@ -54,6 +54,8 @@ prisma generate
 npm run dev
 ```
 
+The very first time you will also need to run `prisma db push` to create the database tables.
+
 ### Environment variables
 
 Required environment variables should be in `.env`: (not `.env.local` because Prisma doesn't support it)
@@ -75,9 +77,9 @@ REDIS_URL="rediss://user:pass@host:6379"
 If you're using this as a template for your own Next.js app, the important parts are:
 * `/src/app/api/oauth/*` - these implement oauth client registration and token exchange
 * `/src/app/oauth/authorize/page.tsx` - this implements the oauth consent screen (it's extremely basic right now)
-* `/src/app/sse/route.ts` - this implements the MCP server itself, with correct redirects to the OAuth endpoints
+* `/src/mcp/[transport]/route.ts` - this implements the MCP server itself. Your tools, resources, etc. should be defined here.
 
-Your app needs to be able to persist clients, access tokens, etc.. To do this it's using a PostgreSQL database accessed via Prisma. You can swap this for some other database if you want (it will be easiest if it's another Prisma-supported database).
+To handle OAuth your app needs to be able to persist clients, access tokens, etc.. To do this it's using a PostgreSQL database accessed via Prisma. You can swap this for some other database if you want (it will be easiest if it's another Prisma-supported database).
 
 You'll also notice:
 * `src/app/auth.ts` - this implements Auth.js authentication to your app itself. It's configured to use Google as a provider, but you can change it to use any other provider supports by Auth.js. This is not required for the MCP server to work, but it's a good idea to have it in place for your own app.
