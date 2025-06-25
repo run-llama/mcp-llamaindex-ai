@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { auth } from "./auth";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
@@ -8,18 +7,20 @@ export const metadata: Metadata = {
   description: "Connect MCP clients to your LlamaCloud indexes!",
 };
 
-export default async function RootLayout({
+function SessionProviderWrapper({ children }: { children: React.ReactNode }) {
+  // This is a client component wrapper for SessionProvider
+  return <SessionProvider>{children}</SessionProvider>;
+}
+
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
   return (
     <html lang="en">
       <body>
-        <SessionProvider session={session}>
-          {children}
-        </SessionProvider>
+        <SessionProviderWrapper>{children}</SessionProviderWrapper>
       </body>
     </html>
   );

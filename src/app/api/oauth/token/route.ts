@@ -69,9 +69,31 @@ export async function POST(request: NextRequest) {
 
     console.log("Finding auth code:", code);
     const authCode = await prisma.authCode.findUnique({ where: { code } });
-    if (!authCode || authCode.clientId !== client.id || authCode.redirectUri !== redirect_uri) {
-      console.log("Invalid code or redirect_uri mismatch.", { authCode, client_id: client.id, redirect_uri });
+    if (!authCode) {
+      console.log("Auth code not found:", code);
       return NextResponse.json({ error: 'Invalid code' }, { 
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      });
+    }
+    if (authCode.clientId !== client.id) {
+      console.log("Client ID mismatch. Expected:", client.id, "Got:", authCode.clientId);
+      return NextResponse.json({ error: 'Invalid code' }, {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      });
+    }
+    if (authCode.redirectUri !== redirect_uri) {
+      console.log("Redirect URI mismatch. Expected:", authCode.redirectUri, "Got:", redirect_uri);
+      return NextResponse.json({ error: 'Invalid code' }, {
         status: 400,
         headers: {
           'Access-Control-Allow-Origin': '*',

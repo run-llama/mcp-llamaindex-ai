@@ -19,6 +19,10 @@ model User {
   clients       Client[]
   accessTokens  AccessToken[]
   authCodes     AuthCode[]
+  api_key       String?
+  project_id    String?
+  organization_id String?
+  tools         Tools[]
 }
 
 model Account {
@@ -96,4 +100,14 @@ model AuthCode {
   codeChallengeMethod String?
 
   createdAt DateTime @default(now())
+}
+
+model Tools {
+  userId String
+  indexId String
+  config Json
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, indexId])
 }

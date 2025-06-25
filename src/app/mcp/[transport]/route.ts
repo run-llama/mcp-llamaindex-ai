@@ -52,6 +52,15 @@ async function authenticateRequest(request: NextRequest) {
 
 // MCP handler with authentication
 const handler = async (req: Request) => {
+  // Log if POST /mcp/sse includes a client_id in the body
+  const url = new URL(req.url);
+  if (req.method === 'POST' && url.pathname.endsWith('/mcp/sse')) {
+    // We need to clone the request to read the body without consuming it for later
+    const requestBody = await req.clone().json().catch(() => null);
+    console.log('[MCP] POST /mcp/sse: request headers:', Object.fromEntries(req.headers.entries()));
+    console.log('[MCP] POST /mcp/sse: requestBody:', requestBody);
+  }
+
   // Inject authentication here
   const nextReq = req as any as NextRequest; // for type compatibility
   const accessToken = await authenticateRequest(nextReq);
@@ -62,30 +71,120 @@ const handler = async (req: Request) => {
     });
   }
 
+  // Fetch all tools for the current user
+  const userId = accessToken.userId;
+  const tools = await prisma.tools.findMany({
+    where: { userId },
+    select: { config: true, indexId: true },
+  });
+
   // Log request body
   const requestBody = await req.clone().json().catch(() => null);
   console.log('[MCP] Request body:', requestBody);
 
   return createMcpHandler(
     (server) => {
-      server.tool(
-        "add_numbers",
-        "Adds two numbers together and returns the sum",
-        {
-          a: z.number().describe("First number to add"),
-          b: z.number().describe("Second number to add"),
-        },
-        async ({ a, b }) => {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `The sum of ${a} and ${b} is ${a + b}`,
-              },
-            ],
-          };
+      for (const tool of tools) {
+        let config = tool.config || {};
+        if (typeof config === 'string') {
+          try {
+            config = JSON.parse(config);
+          } catch (e) {
+            console.warn('Failed to parse tool config as JSON:', config);
+            continue;
+          }
         }
-      );
+        // Only use config if it's a non-null object and not an array
+        if (!config || typeof config !== 'object' || Array.isArray(config)) continue;
+        const name = (config as any).tool_name;
+        const description = (config as any).tool_description;
+        if (!name || !description) continue;
+        server.tool(
+          name,
+          description,
+          {
+            query: z.string().describe('Query string for the tool'),
+          },
+          async ({ query }) => {
+            // Fetch user's API key
+            const user = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { api_key: true, organization_id: true, project_id: true },
+            });
+            if (!user?.api_key || !user?.organization_id || !user?.project_id) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'User API key, organization_id, or project_id not found.',
+                  },
+                ],
+              };
+            }
+            const retrieverApiUrl = `https://api.cloud.llamaindex.ai/api/v1/retrievers/retrieve?project_id=${user.project_id}&organization_id=${user.organization_id}`;
+            console.log('[MCP] Calling retriever API:', retrieverApiUrl);
+            
+            const retrieverPayload = {
+              mode: 'full',
+              query,
+              pipelines: [
+                {
+                  name,
+                  description,
+                  pipeline_id: tool.indexId,
+                },
+              ],
+            };
+            console.log('[MCP] Retriever payload:', retrieverPayload);
+            
+            try {
+              console.log('[MCP] Making API request...');
+              const retrieverResponse = await fetch(retrieverApiUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${user.api_key}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(retrieverPayload),
+              });
+              console.log('[MCP] Got response status:', retrieverResponse.status);
+              
+              if (!retrieverResponse.ok) {
+                const errorText = await retrieverResponse.text();
+                console.error('[MCP] API error:', retrieverResponse.status, errorText);
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: `Retriever API error: ${retrieverResponse.status} - ${errorText}`,
+                    },
+                  ],
+                };
+              }
+              const retrieverData = await retrieverResponse.json();
+              console.log('[MCP] API response data:', retrieverData);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify(retrieverData),
+                  },
+                ],
+              };
+            } catch (err) {
+              console.error('[MCP] API call failed:', err);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `Error calling retriever API: ${err}`,
+                  },
+                ],
+              };
+            }
+          }
+        );
+      }
     },
     {
       // Optionally add server capabilities here
