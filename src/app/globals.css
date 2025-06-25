@@ -464,3 +464,47 @@ a {
 .json-copy-btn:hover svg rect {
   stroke: var(--primary-color);
 }
+
+/* Authorize page custom styles */
+.authorize-main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f6fa;
+}
+
+.authorize-container {
+  text-align: center;
+}
+
+.authorize-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+.authorize-description {
+  margin-bottom: 2.5rem;
+}
+
+.authorize-description p {
+  margin-bottom: 1.25rem;
+  font-size: 1rem;
+}
+
+.authorize-subtext {
+  color: #6b7280;
+  font-size: 0.95rem;
+  margin-bottom: 0;
+}
+
+.authorize-form {
+  margin-top: 2.5rem;
+}
+
+.authorize-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}

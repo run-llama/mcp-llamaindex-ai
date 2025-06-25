@@ -112,28 +112,25 @@ export default async function AuthorizePage({
   }
 
   return (
-    <main className="flex items-center justify-center h-screen bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md max-w-sm w-full">
-        <h1 className="text-xl font-semibold mb-4 text-center">
-          Authorize Application
-        </h1>
-        <div className="text-center">
-          <p className="mb-2">
+    <main className="authorize-main">
+      <div className="container authorize-container">
+        <h1 className="authorize-title">Authorize Application</h1>
+        <div className="authorize-description">
+          <p>
             The application{' '}
-            <strong className="font-medium">{client.name}</strong> is
-            requesting access to your account.
+            <strong>{client.name}</strong> is requesting access to your account.
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="authorize-subtext">
             Do you want to grant access?
           </p>
         </div>
-        <form action={handleConsent} className="mt-6">
-          <div className="flex justify-center gap-4">
+        <form action={handleConsent} className="authorize-form">
+          <div className="authorize-actions">
             <button
               type="submit"
               name="consent"
               value="allow"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+              className="button button-primary"
             >
               Allow
             </button>
@@ -141,7 +138,7 @@ export default async function AuthorizePage({
               type="submit"
               name="consent"
               value="deny"
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50"
+              className="button button-secondary"
             >
               Deny
             </button>

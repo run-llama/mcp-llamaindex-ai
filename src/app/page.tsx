@@ -33,9 +33,9 @@ export default function Home() {
           <SignOutButton />
         </div>
       )}
+      <h1 style={{ marginBottom: 24 }}>LlamaCloud MCP Gateway</h1>
       {session?.user ? (
         <div className="auth-container">
-          <h1>LlamaCloud MCP Gateway</h1>
           {hasApiKey === null ? null : hasApiKey ? (
             <>
               <IndexesList />
@@ -145,8 +145,6 @@ function IndexesList() {
   const [toolNameError, setToolNameError] = useState<string | null>(null);
   const nameInputRef = React.useRef<HTMLInputElement>(null);
   const descInputRef = React.useRef<HTMLInputElement>(null);
-  const [nameFocused, setNameFocused] = useState(false);
-  const [descFocused, setDescFocused] = useState(false);
   const [activeTab, setActiveTab] = useState<'indexes' | 'instructions'>('indexes');
 
   useEffect(() => {
@@ -239,30 +237,30 @@ function IndexesList() {
     }
   };
 
-  const maybeSaveEdit = async (id: string) => {
-    setTimeout(async () => {
-      if (!nameFocused && !descFocused) {
+  const handleEditBlur = (id: string) => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (
+        active !== nameInputRef.current &&
+        active !== descInputRef.current
+      ) {
         setToolConfigs(cfgs => ({
           ...cfgs,
           [id]: { ...cfgs[id], ...editValues },
         }));
         setEditingId(null);
-        try {
-          await fetch("/api/tool/update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              indexId: id,
-              enabled: true,
-              config: {
-                tool_name: editValues.tool_name,
-                tool_description: editValues.tool_description,
-              },
-            }),
-          });
-        } catch {
-          alert("Failed to update tool config");
-        }
+        fetch("/api/tool/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            indexId: id,
+            enabled: true,
+            config: {
+              tool_name: editValues.tool_name,
+              tool_description: editValues.tool_description,
+            },
+          }),
+        }).catch(() => alert("Failed to update tool config"));
       }
     }, 0);
   };
@@ -350,8 +348,7 @@ function IndexesList() {
                                   name="tool_name"
                                   value={editValues.tool_name}
                                   onChange={handleEditChange}
-                                  onFocus={() => setNameFocused(true)}
-                                  onBlur={() => { setNameFocused(false); maybeSaveEdit(id); }}
+                                  onBlur={() => handleEditBlur(id)}
                                   onKeyDown={e => handleEditKeyDown(e, id)}
                                   className="tool-name-input"
                                   autoFocus
@@ -367,8 +364,7 @@ function IndexesList() {
                                   name="tool_description"
                                   value={editValues.tool_description}
                                   onChange={e => handleEditChange(e as any)}
-                                  onFocus={() => setDescFocused(true)}
-                                  onBlur={() => { setDescFocused(false); maybeSaveEdit(id); }}
+                                  onBlur={() => handleEditBlur(id)}
                                   onKeyDown={e => handleEditKeyDown(e as any, id)}
                                   className="tool-desc-textarea"
                                 />
