@@ -508,3 +508,27 @@ a {
   justify-content: center;
   gap: 1.5rem;
 }
+
+.footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  font-size: 13px;
+  color: #888;
+  width: 100%;
+  text-align: center;
+  margin-top: 48px;
+  margin-bottom: 16px;
+}
+
+.footer a {
+  color: #888;
+  font-size: 13px;
+  text-decoration: none;
+  transition: text-decoration 0.2s;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}

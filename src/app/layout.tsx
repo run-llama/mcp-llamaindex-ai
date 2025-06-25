@@ -21,6 +21,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <SessionProviderWrapper>{children}</SessionProviderWrapper>
+        <footer className="footer">
+          <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          <a href="/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+        </footer>
       </body>
     </html>
   );

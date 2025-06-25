@@ -49,7 +49,13 @@ export default function Home() {
           )}
         </div>
       ) : (
-        <SignInButton />
+        <>
+          <p style={{ marginBottom: 20 }}>
+            Welcome to the LlamaCloud MCP Gateway!<br/>
+            Sign in to connect your LlamaCloud indexes and expose them as MCP tools for use in Claude, Cursor, VS Code, and more.
+          </p>
+          <SignInButton />
+        </>
       )}
     </div>
   );
