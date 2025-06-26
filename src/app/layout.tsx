@@ -24,6 +24,7 @@ export default function RootLayout({
         <footer className="footer">
           <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
           <a href="/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+          <a href="https://github.com/run-llama/mcp-nextjs">GitHub</a>
         </footer>
       </body>
     </html>
