@@ -1,197 +1,148 @@
 import { createMcpHandler } from "@vercel/mcp-adapter";
 import { z } from "zod";
-import { prisma } from '@/app/prisma';
-import { NextRequest } from 'next/server';
+import { jwtVerify, createRemoteJWKSet } from 'jose';
 
-// Authentication helper
-async function authenticateRequest(request: NextRequest) {
+const LLAMACLOUD_API_BASE_URL =
+  process.env.LLAMACLOUD_API_BASE_URL || 'https://api.cloud.llamaindex.ai';
+
+let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+function getJWKS() {
+  if (!_jwks) {
+    const baseUrl = process.env.WORKOS_AUTHKIT_BASE_URL;
+    if (!baseUrl) throw new Error('WORKOS_AUTHKIT_BASE_URL is not set');
+    _jwks = createRemoteJWKSet(new URL(`${baseUrl}/oauth2/jwks`));
+  }
+  return _jwks;
+}
+
+interface AuthContext {
+  userId: string;
+  accessToken: string; // raw token to forward to platform API
+}
+
+async function authenticateRequest(request: Request): Promise<AuthContext | null> {
   const authHeader = request.headers.get('authorization');
-  console.log('[MCP] Auth header present:', !!authHeader);
-  
-  if (!authHeader) {
-    console.log('[MCP] No auth header, returning 401');
-    return null;
-  }
-
-  const token = authHeader.split(' ')[1];
-  console.log('[MCP] Token extracted:', token ? 'present' : 'missing');
-  
-  if (!token) {
-    console.log('[MCP] No token, returning 401');
-    return null;
-  }
+  const token = authHeader?.match(/^Bearer (.+)$/)?.[1];
+  if (!token) return null;
 
   try {
-    console.log('[MCP] Looking up access token in database');
-    const accessToken = await prisma.accessToken.findUnique({
-      where: { token },
+    const authkitBaseUrl = process.env.WORKOS_AUTHKIT_BASE_URL!;
+    const { payload } = await jwtVerify(token, getJWKS(), {
+      issuer: authkitBaseUrl,
     });
 
-    console.log('[MCP] Access token found:', !!accessToken);
-    
-    if (!accessToken) {
-      console.log('[MCP] No access token found, returning 401');
-      return null;
-    }
-
-    console.log('[MCP] Token expires at:', accessToken.expiresAt);
-    console.log('[MCP] Current time:', new Date());
-    
-    if (accessToken.expiresAt < new Date()) {
-      console.log('[MCP] Token expired, returning 401');
-      return null;
-    }
-
-    console.log('[MCP] Authentication successful');
-    return accessToken;
-  } catch (e) {
-    console.error('[MCP] Error validating token:', e);
+    if (!payload.sub) return null;
+    return { userId: payload.sub, accessToken: token };
+  } catch (err) {
+    console.error('[MCP] JWT verification failed:', err);
     return null;
   }
 }
 
-// MCP handler with authentication
-const handler = async (req: Request) => {
-  // Log if POST /mcp/sse includes a client_id in the body
-  const url = new URL(req.url);
-  if (req.method === 'POST' && url.pathname.endsWith('/mcp/sse')) {
-    // We need to clone the request to read the body without consuming it for later
-    const requestBody = await req.clone().json().catch(() => null);
-    console.log('[MCP] POST /mcp/sse: request headers:', Object.fromEntries(req.headers.entries()));
-    console.log('[MCP] POST /mcp/sse: requestBody:', requestBody);
-  }
-
-  // Inject authentication here
-  const nextReq = req as any as NextRequest; // for type compatibility
-  const accessToken = await authenticateRequest(nextReq);
-  if (!accessToken) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
-  }
-
-  // Fetch all tools for the current user
-  const userId = accessToken.userId;
-  const tools = await prisma.tools.findMany({
-    where: { userId },
-    select: { config: true, indexId: true },
+function unauthorizedResponse(request: Request) {
+  const baseUrl = process.env.MCP_BASE_URL || new URL(request.url).origin;
+  return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+    status: 401,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'WWW-Authenticate':
+        `Bearer error="unauthorized", ` +
+        `error_description="Authorization needed", ` +
+        `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
+    },
   });
+}
 
-  // Log request body
-  const requestBody = await req.clone().json().catch(() => null);
-  console.log('[MCP] Request body:', requestBody);
+// Helper to call the LlamaCloud platform API with the user's WorkOS token
+async function llamaCloudFetch(path: string, accessToken: string, init?: RequestInit) {
+  return fetch(`${LLAMACLOUD_API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+  });
+}
+
+const handler = async (req: Request) => {
+  const auth = await authenticateRequest(req);
+  if (!auth) {
+    return unauthorizedResponse(req);
+  }
 
   return createMcpHandler(
     (server) => {
-      for (const tool of tools) {
-        let config = tool.config || {};
-        if (typeof config === 'string') {
-          try {
-            config = JSON.parse(config);
-          } catch (e) {
-            console.warn('Failed to parse tool config as JSON:', config);
-            continue;
-          }
-        }
-        // Only use config if it's a non-null object and not an array
-        if (!config || typeof config !== 'object' || Array.isArray(config)) continue;
-        const name = (config as any).tool_name;
-        const description = (config as any).tool_description;
-        if (!name || !description) continue;
-        server.tool(
-          name,
-          description,
-          {
-            query: z.string().describe('Query string for the tool'),
-          },
-          async ({ query }) => {
-            // Fetch user's API key
-            const user = await prisma.user.findUnique({
-              where: { id: userId },
-              select: { api_key: true, organization_id: true, project_id: true },
-            });
-            if (!user?.api_key || !user?.organization_id || !user?.project_id) {
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: 'User API key, organization_id, or project_id not found.',
-                  },
-                ],
-              };
-            }
-            const retrieverApiUrl = `https://api.cloud.llamaindex.ai/api/v1/retrievers/retrieve?project_id=${user.project_id}&organization_id=${user.organization_id}`;
-            console.log('[MCP] Calling retriever API:', retrieverApiUrl);
-            
-            const retrieverPayload = {
-              mode: 'full',
-              query,
-              pipelines: [
-                {
-                  name,
-                  description,
-                  pipeline_id: tool.indexId,
-                },
-              ],
+      server.tool(
+        'list_indexes',
+        'List available LlamaCloud indexes. Optionally filter by project_id.',
+        {
+          project_id: z.string().optional().describe('Project ID to filter indexes by'),
+        },
+        async ({ project_id }) => {
+          const params = new URLSearchParams();
+          if (project_id) params.set('project_id', project_id);
+
+          const res = await llamaCloudFetch(
+            `/api/v1/pipelines${params.toString() ? `?${params}` : ''}`,
+            auth.accessToken,
+          );
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            return {
+              content: [{ type: 'text' as const, text: `Error listing indexes: ${res.status} - ${errorText}` }],
             };
-            console.log('[MCP] Retriever payload:', retrieverPayload);
-            
-            try {
-              console.log('[MCP] Making API request...');
-              const retrieverResponse = await fetch(retrieverApiUrl, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${user.api_key}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(retrieverPayload),
-              });
-              console.log('[MCP] Got response status:', retrieverResponse.status);
-              
-              if (!retrieverResponse.ok) {
-                const errorText = await retrieverResponse.text();
-                console.error('[MCP] API error:', retrieverResponse.status, errorText);
-                return {
-                  content: [
-                    {
-                      type: 'text',
-                      text: `Retriever API error: ${retrieverResponse.status} - ${errorText}`,
-                    },
-                  ],
-                };
-              }
-              const retrieverData = await retrieverResponse.json();
-              console.log('[MCP] API response data:', retrieverData);
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify(retrieverData),
-                  },
-                ],
-              };
-            } catch (err) {
-              console.error('[MCP] API call failed:', err);
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: `Error calling retriever API: ${err}`,
-                  },
-                ],
-              };
-            }
           }
-        );
-      }
+
+          const pipelines = await res.json();
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(pipelines) }],
+          };
+        },
+      );
+
+      server.tool(
+        'query_index',
+        'Query a LlamaCloud index to retrieve relevant information.',
+        {
+          pipeline_id: z.string().describe('The pipeline/index ID to query'),
+          project_id: z.string().describe('The project ID that owns this pipeline'),
+          query: z.string().describe('The search query'),
+        },
+        async ({ pipeline_id, project_id, query }) => {
+          const params = new URLSearchParams({ project_id });
+          const res = await llamaCloudFetch(
+            `/api/v1/retrievers/retrieve?${params}`,
+            auth.accessToken,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                query,
+                pipelines: [{ pipeline_id }],
+              }),
+            },
+          );
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            return {
+              content: [{ type: 'text' as const, text: `Retriever error: ${res.status} - ${errorText}` }],
+            };
+          }
+
+          const data = await res.json();
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(data) }],
+          };
+        },
+      );
     },
-    {
-      // Optionally add server capabilities here
-    },
+    {},
     {
       basePath: "/mcp",
-      verboseLogs: true,
       redisUrl: process.env.REDIS_URL,
     }
   )(req);
@@ -199,11 +150,10 @@ const handler = async (req: Request) => {
 
 export { handler as GET, handler as POST };
 
-// CORS preflight handler
 export async function OPTIONS() {
   const response = new Response(null, { status: 200 });
   response.headers.set('Access-Control-Allow-Origin', '*');
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   return response;
-} 
+}

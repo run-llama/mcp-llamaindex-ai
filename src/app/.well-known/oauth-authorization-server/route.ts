@@ -1,40 +1,35 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-export async function GET(request: NextRequest) {
-  const baseUrl =
-    process.env.NEXTAUTH_URL ||
-    `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+const WORKOS_AUTHKIT_BASE_URL = process.env.WORKOS_AUTHKIT_BASE_URL!;
 
-  const metadata = {
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/oauth/authorize`,
-    token_endpoint: `${baseUrl}/api/oauth/token`,
-    registration_endpoint: `${baseUrl}/api/oauth/register`,
-    scopes_supported: ["api:read", "api:write"],
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["none", "client_secret_post"],
-    code_challenge_methods_supported: ["plain", "S256"]
-  };
+// Proxy WorkOS AuthKit's authorization server metadata for backward compatibility
+// with MCP clients that don't support Protected Resource Metadata discovery.
+export async function GET() {
+  const metadataUrl = `${WORKOS_AUTHKIT_BASE_URL}/.well-known/oauth-authorization-server`;
 
+  const upstream = await fetch(metadataUrl, {
+    next: { revalidate: 3600 }, // cache for 1 hour
+  });
+
+  if (!upstream.ok) {
+    return NextResponse.json(
+      { error: 'Failed to fetch authorization server metadata' },
+      { status: 502 },
+    );
+  }
+
+  const metadata = await upstream.json();
   const response = NextResponse.json(metadata);
-  
-  // Add CORS headers
   response.headers.set('Access-Control-Allow-Origin', '*');
   response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
   return response;
 }
 
-export async function OPTIONS(request: NextRequest) {
-  const response = new NextResponse("OK", { status: 200 });
-  
-  // Add CORS headers for preflight requests
+export async function OPTIONS() {
+  const response = new NextResponse('OK', { status: 200 });
   response.headers.set('Access-Control-Allow-Origin', '*');
   response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
   return response;
-} 
+}
