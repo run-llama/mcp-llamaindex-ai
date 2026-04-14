@@ -1,8 +1,4 @@
-import {
-  FileUploadCache,
-  getFileUploadCache,
-} from '@/lib/business/file-upload-cache';
-import { win32 } from 'node:path/win32';
+import { FileUploadCache } from '@/lib/business/file-upload-cache';
 
 describe('FileUploadCache', () => {
   let fileCache: FileUploadCache;

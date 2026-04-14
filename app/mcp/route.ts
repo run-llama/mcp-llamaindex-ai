@@ -1,16 +1,3 @@
-/**
- * AuthHandler Pattern Demo: Vercel MCP Adapter + WorkOS AuthKit
- *
- * This file demonstrates the powerful authHandler wrapper pattern that
- * transforms any MCP server built with the Vercel MCP Adapter into an
- * enterprise-ready, authenticated service with just a few lines of code.
- *
- * Key components:
- * 1. createMcpHandler() - builds the MCP server with type-safe tools
- * 2. experimental_withMcpAuth() - wraps with WorkOS authentication
- * 3. Zero-config deployment to Vercel Edge
- */
-
 import {
   createMcpHandler,
   experimental_withMcpAuth,
@@ -120,6 +107,7 @@ const authHandler = experimental_withMcpAuth(
           ? 'Invalid token signature. Please sign in again.'
           : errorObj.message || 'Authentication failed. Please sign in again.';
 
+      // eslint-disable-next-line preserve-caught-error
       throw new Error(errorMessage);
     }
   },

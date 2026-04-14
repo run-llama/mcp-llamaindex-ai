@@ -1,5 +1,5 @@
 {
-  "name": "@workos/vercel-mcp-example",
+  "name": "@llamaindex/mcp-llamaindex-ai",
   "version": "0.1.0",
   "private": true,
   "description": "A complete example of an authenticated MCP server with WorkOS AuthKit deployed on Vercel",
@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "prettier": "prettier . --check",
     "prettier:fix": "prettier . --write",
     "test": "jest",
@@ -23,12 +23,13 @@
     "@workos-inc/authkit-nextjs": "^2.4.2",
     "async-mutex": "^0.5.0",
     "jose": "^6.0.11",
-    "next": "^15.3.4",
+    "next": "^15.3.8",
     "rate-limiter-flexible": "^11.0.0",
     "tslog": "^4.10.2",
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^6.1.4",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
@@ -39,20 +40,14 @@
     "autoprefixer": "^10.4.19",
     "eslint": "^9",
     "eslint-config-next": "^15.3.4",
+    "globals": "^17.5.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.4.38",
     "prettier": "^3.5.3",
     "tailwindcss": "^4.1.10",
-    "typescript": "^5"
-  },
-  "pnpm": {
-    "overrides": {
-      "prismjs": "1.30.0"
-    }
-  },
-  "overrides": {
-    "prismjs": "1.30.0"
+    "typescript": "^5",
+    "typescript-eslint": "^8.58.2"
   },
   "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
 }
