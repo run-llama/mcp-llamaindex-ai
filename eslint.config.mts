@@ -5,7 +5,16 @@ import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
   {
-    files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
+    ignores: ['.next/**', 'node_modules/**', 'jest.*.js', 'next.*.ts'],
+  },
+  {
+    files: [
+      'lib/**/*.ts',
+      'app/**/*.ts',
+      '__tests__/*.ts',
+      'middleware.ts',
+      'instrumentation.ts',
+    ],
     plugins: { js },
     extends: ['js/recommended'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },

@@ -22,7 +22,7 @@ export async function uploadFile({
   fileType = undefined,
 }: {
   authToken: string;
-  fileData: string | Uint8Array<ArrayBufferLike>;
+  fileData: string | Uint8Array<ArrayBuffer>;
   fileName: string;
   purpose?: string | undefined;
   fileType?: string | undefined;
