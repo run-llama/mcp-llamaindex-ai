@@ -1,13 +1,12 @@
-import type { NextConfig } from "next";
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const nextConfig: NextConfig = {
-  typescript: {
-    // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors.
-    // !! WARN !!
-    ignoreBuildErrors: true,
-  },
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ['@workos-inc/authkit-nextjs'],
+  outputFileTracingRoot: __dirname,
 };
 
 export default nextConfig;
