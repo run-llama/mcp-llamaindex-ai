@@ -41,7 +41,12 @@ class KVStore {
 
   async get(token: string) {
     const client = await this.getClient();
-    return await client.getDel(token);
+    return await client.get(token);
+  }
+
+  async delete(token: string) {
+    const client = await this.getClient();
+    await client.del(token);
   }
 }
 

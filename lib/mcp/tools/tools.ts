@@ -61,6 +61,7 @@ export function registerLlamaParseTools(server: McpServer) {
         }
         const token = randomBytes(48).toString('base64url');
         const kvStore = getKVStore();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
         try {
           await kvStore.set(token, authInfo!.token);
           logger.debug('Token successfully generated');
@@ -87,12 +88,17 @@ export function registerLlamaParseTools(server: McpServer) {
         const base = `${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/api/upload/${token}`;
         const url = new URL(base);
         url.searchParams.set('purpose', args.purpose ?? 'parse');
+        url.searchParams.set('expires_at', expiresAt);
         const presignedUrl = url.toString();
+        const urlUpload = new URL(
+          `${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/upload/${token}`
+        );
+        urlUpload.searchParams.set('expires_at', expiresAt);
         return {
           content: [
             {
               type: 'text',
-              text: `Send a POST request to this URL: ${presignedUrl} with a multipart form containing the file you want to upload under the 'file' key. You will receive the URL of the uploaded file.\n\nIf you can't use bash or your user prefers to upload the file manually, direct them to ${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/upload and tell them to sign in and upload the file with this token: ${token} and with purpose: ${args.purpose ?? 'parse'}\n\nImportant note: The token is only valid for 10 minutes.`,
+              text: `Send a POST request to this URL: ${presignedUrl} with a multipart form containing the file you want to upload under the 'file' key. You will receive the URL of the uploaded file.\n\nIf you can't use bash or your user prefers to upload the file manually, direct them to ${urlUpload}\n\nImportant note: The token is only valid for 10 minutes.`,
             },
           ],
         } as {

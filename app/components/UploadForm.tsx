@@ -1,13 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import type { User } from '../../lib/auth/types';
 
-export default function UploadForm({ user }: { user: User | null }) {
+export default function UploadForm({ token }: { token: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [purpose, setPurpose] = useState<string>('parse');
-  const [token, setToken] = useState<string>('');
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -19,7 +17,6 @@ export default function UploadForm({ user }: { user: User | null }) {
 
   const handleClear = () => {
     setFile(null);
-    setToken('');
     setPurpose('parse');
     setSuccess(null);
     setError(null);
@@ -27,7 +24,7 @@ export default function UploadForm({ user }: { user: User | null }) {
   };
 
   const handleFileCreate = async () => {
-    if (!file || !token) return;
+    if (!file) return;
     setSuccess(null);
     setError(null);
     setLoading(true);
@@ -66,110 +63,72 @@ export default function UploadForm({ user }: { user: User | null }) {
     <div className="upload-page">
       <div className="upload-container">
         <h1 className="upload-title">File Upload</h1>
+        <>
+          <div className="upload-field">
+            <label htmlFor="purpose" className="upload-label">
+              Upload purpose (optional)
+            </label>
+            <select
+              id="purpose"
+              value={purpose}
+              className="upload-select"
+              onChange={(e) => setPurpose(e.target.value)}
+            >
+              <option value="parse">parse</option>
+              <option value="user_data">user_data</option>
+              <option value="classify">classify</option>
+              <option value="split">split</option>
+              <option value="extract">extract</option>
+              <option value="sheet">sheet</option>
+              <option value="agent_app">agent_app</option>
+            </select>
+          </div>
 
-        <div className="upload-auth-row">
-          {user ? (
-            <a href="/logout" className="btn btn-danger">
-              Sign Out
-            </a>
-          ) : (
-            <a href="/login" className="btn btn-primary">
-              Sign In
-            </a>
-          )}
-        </div>
+          <div className="upload-field">
+            <label htmlFor="file" className="upload-label">
+              File
+            </label>
+            <input
+              id="file"
+              type="file"
+              required
+              ref={fileInputRef}
+              className="upload-file-input"
+              onChange={handleFileChange}
+            />
+          </div>
 
-        {user ? (
-          <>
-            <p className="upload-signed-in-text">
-              Signed in as <strong>{user.firstName || user.email}</strong>
+          <div className="upload-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!file || loading}
+              onClick={handleFileCreate}
+            >
+              {file ? 'Upload' : 'Select a file and provide a token'}
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={handleClear}
+            >
+              Clear
+            </button>
+          </div>
+
+          {loading && (
+            <p className="upload-status upload-status-loading">
+              Uploading your file...
             </p>
-
-            <div className="upload-field">
-              <label htmlFor="token" className="upload-label">
-                Upload Token
-              </label>
-              <input
-                id="token"
-                type="password"
-                required
-                value={token}
-                placeholder="Enter your secret upload token"
-                className="upload-input"
-                onChange={(e) => setToken(e.target.value)}
-              />
-            </div>
-
-            <div className="upload-field">
-              <label htmlFor="purpose" className="upload-label">
-                Upload purpose (optional)
-              </label>
-              <select
-                id="purpose"
-                value={purpose}
-                className="upload-select"
-                onChange={(e) => setPurpose(e.target.value)}
-              >
-                <option value="parse">parse</option>
-                <option value="user_data">user_data</option>
-                <option value="classify">classify</option>
-                <option value="split">split</option>
-                <option value="extract">extract</option>
-                <option value="sheet">sheet</option>
-                <option value="agent_app">agent_app</option>
-              </select>
-            </div>
-
-            <div className="upload-field">
-              <label htmlFor="file" className="upload-label">
-                File
-              </label>
-              <input
-                id="file"
-                type="file"
-                required
-                ref={fileInputRef}
-                className="upload-file-input"
-                onChange={handleFileChange}
-              />
-            </div>
-
-            <div className="upload-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={!file || !token || loading}
-                onClick={handleFileCreate}
-              >
-                {file && token ? 'Upload' : 'Select a file and provide a token'}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={handleClear}
-              >
-                Clear
-              </button>
-            </div>
-
-            {loading && (
-              <p className="upload-status upload-status-loading">
-                Uploading your file...
-              </p>
-            )}
-            {!loading && success && (
-              <p className="upload-status upload-status-success">{success}</p>
-            )}
-            {!loading && error && (
-              <p className="upload-status upload-status-error">{error}</p>
-            )}
-          </>
-        ) : (
-          <p className="upload-signin-prompt">
-            Sign in to access the file upload form.
-          </p>
-        )}
+          )}
+          {!loading && success && (
+            <p className="upload-status upload-status-success">{success}</p>
+          )}
+          {!loading && error && (
+            <p className="upload-status upload-status-error">{error}</p>
+          )}
+        </>
       </div>
     </div>
   );

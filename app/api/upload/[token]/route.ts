@@ -40,11 +40,13 @@ export async function POST(req: NextRequest, { params }) {
       file,
       purpose,
     });
+    // invalidate token only on success
+    await kvStore.delete(token);
     return NextResponse.json({ file_id: fileObj.id }, { status: 200 });
   } catch (e) {
     return NextResponse.json(
       {
-        detail: `File upload failed because of ${e}. If you wish to retry uploading the file, you will have to generate a new upload URL (the one used with this request has been invalidated)`,
+        detail: `File upload failed because of ${e}. If less than 10 minutes have passed since the generation of the token, you will be able to retry with the same URL, otherwise you'll have to obtain a new one`,
       },
       { status: 500 }
     );
