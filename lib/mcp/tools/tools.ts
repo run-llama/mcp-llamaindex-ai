@@ -68,7 +68,7 @@ export function registerLlamaParseTools(server: McpServer) {
         } catch (e) {
           const message = `An error occurred while generating the presigned url: ${e}`;
           logger.error(message);
-          span.setAttribute('presignedUrl.error', message);
+          span.setAttribute('uploadUrl.error', message);
           span.end();
           return {
             content: [
@@ -83,7 +83,7 @@ export function registerLlamaParseTools(server: McpServer) {
             isError: boolean;
           };
         }
-        span.setAttribute('presignedUrl.success', true);
+        span.setAttribute('uploadUrl.success', true);
         span.end();
         const base = `${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/api/upload/${token}`;
         const url = new URL(base);
@@ -98,7 +98,7 @@ export function registerLlamaParseTools(server: McpServer) {
           content: [
             {
               type: 'text',
-              text: `Send a POST request to this URL: ${presignedUrl} with a multipart form containing the file you want to upload under the 'file' key. You will receive the URL of the uploaded file.\n\nIf you can't use bash or your user prefers to upload the file manually, direct them to ${urlUpload}\n\nImportant note: The token is only valid for 10 minutes.`,
+              text: `Send a POST request to this URL: ${presignedUrl} with a multipart form containing the file you want to upload under the 'file' key. You will receive the URL of the uploaded file.\n\nIf you can't use bash or your user prefers to upload the file manually, direct them to ${urlUpload}\n\nImportant note: The token is only valid until ${expiresAt} (time refers to UTC).`,
             },
           ],
         } as {

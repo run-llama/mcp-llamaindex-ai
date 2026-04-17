@@ -44,6 +44,23 @@ class KVStore {
     return await client.get(token);
   }
 
+  async setFileId(token: string, fileId: string) {
+    const key = `file_id:${token}`;
+    const client = await this.getClient();
+    await client.set(key, fileId, {
+      expiration: {
+        type: 'EX',
+        value: 3600, // 1 hour
+      },
+    });
+  }
+
+  async getFileId(token: string) {
+    const key = `file_id:${token}`;
+    const client = await this.getClient();
+    return await client.get(key);
+  }
+
   async delete(token: string) {
     const client = await this.getClient();
     await client.del(token);

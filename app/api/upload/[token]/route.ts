@@ -12,6 +12,10 @@ export async function POST(req: NextRequest, { params }) {
     );
   }
   const kvStore = getKVStore();
+  const fileId = await kvStore.getFileId(token);
+  if (fileId) {
+    return NextResponse.json({ file_id: fileId }, { status: 200 });
+  }
   const authToken = await kvStore.get(token);
   if (!authToken) {
     return NextResponse.json(
@@ -42,6 +46,8 @@ export async function POST(req: NextRequest, { params }) {
     });
     // invalidate token only on success
     await kvStore.delete(token);
+    // store file ID
+    await kvStore.setFileId(token, fileObj.id);
     return NextResponse.json({ file_id: fileObj.id }, { status: 200 });
   } catch (e) {
     return NextResponse.json(
