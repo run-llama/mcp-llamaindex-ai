@@ -16,12 +16,98 @@ import {
 import { createMcpHandler } from '@vercel/mcp-adapter';
 import { trace } from '@opentelemetry/api';
 import z from 'zod';
+import { randomBytes } from 'node:crypto';
+import { getKVStore } from '@/lib/business/kv';
 
 const tracer = trace.getTracer('mcp-tools');
 
 type McpServer = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
 
 export function registerLlamaParseTools(server: McpServer) {
+  server.tool(
+    'getUploadUrl',
+    'Get a pre-signed URL to upload a file to the LlamaParse S3 storage',
+    {
+      purpose: z
+        .string()
+        .optional()
+        .describe(
+          "Expected downstream processing workload for the file to upload. Allowed values: 'user_data', 'parse', 'extract', 'split', 'classify', 'sheet', 'agent_app'. Defaults to 'parse' if not provided."
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.getUploadUrl', async (span) => {
+        const logger = getLogger();
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        const token = randomBytes(48).toString('base64url');
+        const kvStore = getKVStore();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        try {
+          await kvStore.set(token, authInfo!.token);
+          logger.debug('Token successfully generated');
+        } catch (e) {
+          const message = `An error occurred while generating the presigned url: ${e}`;
+          logger.error(message);
+          span.setAttribute('uploadUrl.error', message);
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: message,
+              },
+            ],
+            isError: true,
+          } as {
+            content: { type: 'text'; text: string }[];
+            isError: boolean;
+          };
+        }
+        span.setAttribute('uploadUrl.success', true);
+        span.end();
+        const base = `${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/api/upload/${token}`;
+        const url = new URL(base);
+        url.searchParams.set('purpose', args.purpose ?? 'parse');
+        url.searchParams.set('expires_at', expiresAt);
+        const presignedUrl = url.toString();
+        const urlUpload = new URL(
+          `${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/upload/${token}`
+        );
+        urlUpload.searchParams.set('expires_at', expiresAt);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Send a POST request to this URL: ${presignedUrl} with a multipart form containing the file you want to upload under the 'file' key. You will receive the URL of the uploaded file.\n\nIf you can't use bash or your user prefers to upload the file manually, direct them to ${urlUpload}\n\nImportant note: The token is only valid until ${expiresAt} (time refers to UTC).`,
+            },
+          ],
+        } as {
+          content: { type: 'text'; text: string }[];
+        };
+      });
+    }
+  );
+
   server.tool(
     'uploadFileByUrl',
     'Upload a file to LLamaParse S3 storage providing a URL to download the file data. On upload completion, the file will be sent to LlamaParse S3 storage, so that it can be used for downstream processing tasks like parsing, classification or splitting.',
