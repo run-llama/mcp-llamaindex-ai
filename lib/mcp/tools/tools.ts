@@ -1,5 +1,4 @@
 import { ensureUserAuthenticated } from '@/lib/auth/helpers';
-import { getFileUploadCache } from '@/lib/business/file-upload-cache';
 import {
   classifyFile,
   parseFile,
@@ -8,11 +7,6 @@ import {
 } from '@/lib/business/llamaparse';
 import { Category, SplitCategory } from '@/lib/business/types';
 import { getLogger, redactFileId } from '@/lib/observability/logger';
-import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import {
-  ServerNotification,
-  ServerRequest,
-} from '@modelcontextprotocol/sdk/types.js';
 import { createMcpHandler } from '@vercel/mcp-adapter';
 import { trace } from '@opentelemetry/api';
 import z from 'zod';
@@ -204,165 +198,6 @@ export function registerLlamaParseTools(server: McpServer) {
           span.setAttribute('tool.error', true);
           span.end();
           throw err;
-        }
-      });
-    }
-  );
-  server.tool(
-    'uploadFileChunk',
-    'Upload the chunk of a base64-encoded file. On upload completion, the file will be sent to LlamaParse S3 storage, so that it can be used for downstream processing tasks like parsing, classification or splitting.',
-    {
-      chunkData: z
-        .string()
-        .describe('Base64-encoded data of the file to upload'),
-      chunkIndex: z.number().describe('Index of the chunk, 1-based'),
-      totalChunks: z.number().describe('Total chunks expected for upload'),
-      fileName: z.string().describe('Basename of the original file'),
-      fileType: z
-        .string()
-        .optional()
-        .describe(
-          'Mimetype of the file. Defaults to application/pdf if not provided. Highly recommended to always provide it'
-        ),
-      purpose: z
-        .string()
-        .optional()
-        .describe(
-          "Expected downstream processing workload. Allowed values: 'user_data', 'parse', 'extract', 'split', 'classify', 'sheet', 'agent_app'. Defaults to 'parse' if not provided."
-        ),
-    },
-    async (
-      args,
-      extra: RequestHandlerExtra<ServerRequest, ServerNotification>
-    ) => {
-      return tracer.startActiveSpan('tool.uploadFileChunk', async (span) => {
-        span.setAttribute('tool.file_name', args.fileName);
-        span.setAttribute('tool.chunk_index', args.chunkIndex);
-        span.setAttribute('tool.total_chunks', args.totalChunks);
-        if (args.fileType) span.setAttribute('tool.file_type', args.fileType);
-        if (args.purpose) span.setAttribute('tool.purpose', args.purpose);
-        const { authInfo } = extra;
-        ensureUserAuthenticated(authInfo);
-        const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
-        const cache = getFileUploadCache();
-        if (args.chunkIndex < args.totalChunks) {
-          await cache.addFileChunk(
-            args.fileName,
-            args.chunkIndex,
-            args.chunkData
-          );
-          logger.debug(
-            `Uploaded chunk ${args.chunkIndex} of ${args.totalChunks} for file ${args.fileName}`
-          );
-          span.end();
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Uploaded chunk ${args.chunkIndex} of ${args.totalChunks} for file ${args.fileName}`,
-              },
-            ],
-          } as {
-            content: { type: 'text'; text: string }[];
-          };
-        } else {
-          // upload last chunk
-          await cache.addFileChunk(
-            args.fileName,
-            args.chunkIndex,
-            args.chunkData
-          );
-          if (
-            !(await cache.verifyChunksNumber(args.fileName, args.totalChunks))
-          ) {
-            logger.error(
-              `The expected total number of chunks is less than the uploaded ones for ${args.fileName}`
-            );
-            span.setAttribute('tool.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `The expected total number of chunks is less than the uploaded ones for ${args.fileName}`,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-          const fileData = await cache.getCompleteFile(args.fileName);
-          if (!fileData) {
-            logger.error(
-              `Could not retrieve file data for ${args.fileName} from cache`
-            );
-            span.setAttribute('tool.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `Could not retrieve file data for ${args.fileName}, are you sure you uploaded it?`,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-          try {
-            await cache.free(args.fileName);
-            const fileId = await uploadFile({
-              authToken: authInfo!.token,
-              fileData: fileData,
-              fileName: args.fileName,
-              fileType: args.fileType,
-              purpose: args.purpose,
-            });
-            logger.info(
-              `Produced file ID as a result of file upload by chunks: ${redactFileId(fileId)}`
-            );
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `ID for the uploaded file: ${fileId}`,
-                },
-              ],
-            } as {
-              content: { type: 'text'; text: string }[];
-            };
-          } catch (err) {
-            logger.error(
-              `An error occurred while uploading file by chunks: ${err}`
-            );
-            span.setAttribute('tool.error', true);
-            span.end();
-            throw err;
-          }
         }
       });
     }
