@@ -1,6 +1,7 @@
 import { ensureUserAuthenticated } from '@/lib/auth/helpers';
 import {
   classifyFile,
+  getProjects,
   parseFile,
   splitFile,
   uploadFile,
@@ -27,6 +28,12 @@ export function registerLlamaParseTools(server: McpServer) {
         .optional()
         .describe(
           "Expected downstream processing workload for the file to upload. Allowed values: 'user_data', 'parse', 'extract', 'split', 'classify', 'sheet', 'agent_app'. Defaults to 'parse' if not provided."
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
     async (args, extra) => {
@@ -90,9 +97,15 @@ export function registerLlamaParseTools(server: McpServer) {
         const url = new URL(base);
         url.searchParams.set('purpose', args.purpose ?? 'parse');
         url.searchParams.set('expires_at', expiresAt);
+        if (args.projectId) {
+          url.searchParams.set('project_id', args.projectId);
+        }
         const presignedUrl = url.toString();
         const urlUpload = new URL(`${prod_url}/upload/${token}`);
         urlUpload.searchParams.set('expires_at', expiresAt);
+        if (args.projectId) {
+          url.searchParams.set('project_id', args.projectId);
+        }
         return {
           content: [
             {
@@ -124,6 +137,12 @@ export function registerLlamaParseTools(server: McpServer) {
         .optional()
         .describe(
           "Expected downstream processing workload. Allowed values: 'user_data', 'parse', 'extract', 'split', 'classify', 'sheet', 'agent_app'. Defaults to 'parse' if not provided."
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
     async (args, extra) => {
@@ -183,6 +202,7 @@ export function registerLlamaParseTools(server: McpServer) {
             fileName: args.fileName,
             fileType: args.fileType,
             purpose: args.purpose,
+            projectId: args.projectId,
           });
           logger.info(
             `Produced file ID as a result of file upload by URL: ${redactFileId(fileId)}`
@@ -200,6 +220,60 @@ export function registerLlamaParseTools(server: McpServer) {
           };
         } catch (err) {
           logger.error(`An error occurred while uploading file by URL: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+
+  server.tool(
+    'getUserProjects',
+    'Get all the project IDs associated to a user so that you can use them to call tools from different project IDs',
+    {},
+    async (_args, extra) => {
+      return tracer.startActiveSpan('tool.getUserProjects', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        try {
+          const result = await getProjects(authInfo!.token);
+          logger.info(
+            `Successfully obtained ${result.length} projects for the user`
+          );
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Project IDs: ${result.join(', ')}`,
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while getting projects: ${err}`);
           span.setAttribute('tool.error', true);
           span.end();
           throw err;
@@ -232,6 +306,12 @@ export function registerLlamaParseTools(server: McpServer) {
         .optional()
         .describe(
           'Whether to extract markdown or plain text. Defaults to true (extract markdown).'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
     async (args, extra) => {
@@ -268,6 +348,7 @@ export function registerLlamaParseTools(server: McpServer) {
             tier: args.tier,
             version: args.version,
             markdown: args.markdown,
+            projectId: args.projectId,
           });
           logger.info(`Successfully parsed ${redactFileId(args.fileId)}`);
           span.end();
@@ -310,6 +391,12 @@ export function registerLlamaParseTools(server: McpServer) {
         .describe(
           'Array of categories for the file to be classfied as. Category types should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
         ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.classifyFile', async (span) => {
@@ -343,6 +430,7 @@ export function registerLlamaParseTools(server: McpServer) {
             fileId: args.fileId,
             mode: args.mode,
             categories: args.categories,
+            projectId: args.projectId,
           });
           logger.info(`Successfully classified ${redactFileId(args.fileId)}`);
           span.end();
@@ -386,6 +474,12 @@ export function registerLlamaParseTools(server: McpServer) {
         .describe(
           'Array of categories for the file to be classfied as. Category names should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
         ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.splitFile', async (span) => {
@@ -423,6 +517,7 @@ export function registerLlamaParseTools(server: McpServer) {
             fileId: args.fileId,
             allowUnacategorized: args.allowUncategorized,
             categories: args.categories,
+            projectId: args.projectId,
           });
           logger.info(`Successfully classified ${redactFileId(args.fileId)}`);
           span.end();

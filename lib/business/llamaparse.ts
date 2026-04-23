@@ -20,12 +20,14 @@ export async function uploadFile({
   fileName,
   purpose = undefined,
   fileType = undefined,
+  projectId = undefined,
 }: {
   authToken: string;
   fileData: string | Uint8Array<ArrayBuffer>;
   fileName: string;
   purpose?: string | undefined;
   fileType?: string | undefined;
+  projectId?: string | undefined;
 }): Promise<string> {
   const client = new LlamaCloud({
     apiKey: authToken,
@@ -52,6 +54,7 @@ export async function uploadFile({
   const fileObj = await client.files.create({
     file: file,
     purpose: purpose ?? 'parse',
+    project_id: projectId,
   });
   return fileObj.id;
 }
@@ -62,12 +65,14 @@ export async function parseFile({
   tier = undefined,
   version = undefined,
   markdown = true,
+  projectId = undefined,
 }: {
   authToken: string;
   fileId: string;
   tier?: undefined | 'cost_effective' | 'agentic' | 'agentic_plus';
   version?: undefined | string;
   markdown?: boolean;
+  projectId?: string | undefined;
 }): Promise<ParsingResult> {
   const client = new LlamaCloud({
     apiKey: authToken,
@@ -78,6 +83,7 @@ export async function parseFile({
     version: version ?? 'latest',
     tier: tier ?? 'cost_effective',
     file_id: fileId,
+    project_id: projectId,
     expand,
   });
   const parsingResult: ParsingResult = {};
@@ -94,11 +100,13 @@ export async function classifyFile({
   fileId,
   categories,
   mode = undefined,
+  projectId = undefined,
 }: {
   authToken: string;
   fileId: string;
   categories: CategoryType[];
   mode?: 'FAST' | undefined;
+  projectId?: string | undefined;
 }) {
   const client = new LlamaCloud({
     apiKey: authToken,
@@ -111,6 +119,7 @@ export async function classifyFile({
       mode,
       rules: categories,
     },
+    project_id: projectId,
   });
 
   const baseDelay = 0.1;
@@ -118,7 +127,9 @@ export async function classifyFile({
   let classRes;
   // max 30 minutes of total wait time
   while (Date.now() - start < MaximumWaitingTime) {
-    const result = await client.classify.get(job.id);
+    const result = await client.classify.get(job.id, {
+      project_id: projectId,
+    });
     if (result.result) {
       classRes = result.result;
       break;
@@ -149,11 +160,13 @@ export async function splitFile({
   fileId,
   categories,
   allowUnacategorized = undefined,
+  projectId = undefined,
 }: {
   authToken: string;
   fileId: string;
   categories: SplitCategoryType[];
   allowUnacategorized?: 'include' | 'omit' | 'forbid' | undefined;
+  projectId?: string | undefined;
 }) {
   const client = new LlamaCloud({
     apiKey: authToken,
@@ -168,9 +181,12 @@ export async function splitFile({
         allow_uncategorized: allowUnacategorized ?? 'include',
       },
     },
+    project_id: projectId,
   });
 
-  const result = await client.beta.split.waitForCompletion(job.id);
+  const result = await client.beta.split.waitForCompletion(job.id, {
+    project_id: projectId,
+  });
   if (result.result) {
     const splitResult: SplitResult = {
       fileId: fileId,
@@ -193,4 +209,14 @@ export async function splitFile({
     return splitResult;
   }
   throw new Error('No split result was produced');
+}
+
+export async function getProjects(authToken: string): Promise<string[]> {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  const projects = await client.projects.list();
+  const projectIds = projects.map((p) => p.id);
+  return projectIds;
 }

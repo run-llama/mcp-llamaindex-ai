@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, { params }) {
     );
   }
   const purpose = req.nextUrl.searchParams.get('purpose') ?? 'parse';
+  const projectId = req.nextUrl.searchParams.get('project_id') ?? undefined;
   const client = new LlamaCloud({
     apiKey: authToken,
     baseURL: process.env.LLAMA_CLOUD_BASE_URL,
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest, { params }) {
     const fileObj = await client.files.create({
       file,
       purpose,
+      project_id: projectId,
     });
     // invalidate token only on success
     await kvStore.delete(token);

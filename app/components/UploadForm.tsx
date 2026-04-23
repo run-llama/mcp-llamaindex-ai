@@ -2,7 +2,13 @@
 
 import { useRef, useState } from 'react';
 
-export default function UploadForm({ token }: { token: string }) {
+export default function UploadForm({
+  token,
+  projectId = undefined,
+}: {
+  token: string;
+  projectId?: string | undefined;
+}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [purpose, setPurpose] = useState<string>('parse');
@@ -31,9 +37,18 @@ export default function UploadForm({ token }: { token: string }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const base = `${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}/api/upload/${token}`;
+      const prod_url =
+        process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!.startsWith(
+          'http'
+        )
+          ? process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!
+          : 'https://' + process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!;
+      const base = `${prod_url}/api/upload/${token}`;
       const url = new URL(base);
       url.searchParams.set('purpose', purpose);
+      if (projectId) {
+        url.searchParams.set('project_id', projectId);
+      }
 
       const res = await fetch(url.toString(), {
         method: 'POST',
