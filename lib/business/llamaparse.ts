@@ -220,3 +220,77 @@ export async function getProjects(authToken: string): Promise<string[]> {
   const projectIds = projects.map((p) => p.id);
   return projectIds;
 }
+
+export async function generateExtractSchema({
+  token,
+  fileId,
+  projectId = undefined,
+  generationPrompt,
+}: {
+  token: string;
+  fileId: string;
+  projectId?: string | undefined;
+  generationPrompt: string;
+}): Promise<[string, string]> {
+  const client = new LlamaCloud({
+    apiKey: token,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  const configCreateReq = await client.extract.generateSchema({
+    project_id: projectId,
+    prompt: generationPrompt,
+    file_id: fileId,
+  });
+  const response = await client.configurations.create({
+    ...configCreateReq,
+    project_id: projectId,
+  });
+  if (response.parameters.product_type === 'extract_v2') {
+    return [JSON.stringify(response.parameters.data_schema), response.id];
+  } else {
+    throw new Error('Could not generate a schema');
+  }
+}
+
+export async function extract({
+  token,
+  fileId,
+  projectId = undefined,
+  configurationId,
+}: {
+  token: string;
+  fileId: string;
+  projectId?: string | undefined;
+  configurationId: string;
+}) {
+  const client = new LlamaCloud({
+    apiKey: token,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  const response = await client.extract.run({
+    file_input: fileId,
+    configuration_id: configurationId,
+    project_id: projectId,
+  });
+  if (!response.extract_result) {
+    throw new Error('No extract result produced');
+  }
+  let result: {
+    [key: string]:
+      | string
+      | number
+      | boolean
+      | unknown[]
+      | {
+          [key: string]: unknown;
+        }
+      | null;
+  };
+  if (!Array.isArray(response.extract_result)) {
+    result = response.extract_result;
+  } else {
+    result = response.extract_result[0]!;
+  }
+
+  return JSON.stringify(result, undefined, 2);
+}
