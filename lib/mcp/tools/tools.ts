@@ -1,6 +1,8 @@
 import { ensureUserAuthenticated } from '@/lib/auth/helpers';
 import {
   classifyFile,
+  extract,
+  generateExtractSchema,
   getProjects,
   parseFile,
   splitFile,
@@ -461,7 +463,7 @@ export function registerLlamaParseTools(server: McpServer) {
       fileId: z
         .string()
         .describe(
-          'ID of the file to classify, as returned by the file upload tool or provided by the user'
+          'ID of the file to split, as returned by the file upload tool or provided by the user'
         ),
       allowUncategorized: z
         .enum(['omit', 'include', 'forbid'])
@@ -519,13 +521,175 @@ export function registerLlamaParseTools(server: McpServer) {
             categories: args.categories,
             projectId: args.projectId,
           });
-          logger.info(`Successfully classified ${redactFileId(args.fileId)}`);
+          logger.info(`Successfully split ${redactFileId(args.fileId)}`);
           span.end();
           return {
             content: [
               {
                 type: 'text',
                 text: result.asString(),
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while splitting: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+
+  server.tool(
+    'generateExtractionConfig',
+    'Generate the configuration to extract structured data from a specific file using the Extract service from the LlamaParse Platform. Provide a prompt describing what the schema of the extracted data, the ID of the file to extract and, optionally, a project ID.',
+    {
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file for which to generate the extraction config, as returned by the file upload tool or provided by the user'
+        ),
+      generationPrompt: z
+        .string()
+        .describe(
+          'Prompt to generate the extraction configuration, describing the data schema to extract.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.generateExtractionConfig',
+        async (span) => {
+          span.setAttribute('tool.file_id', redactFileId(args.fileId));
+          span.setAttribute('tool.prompt', args.generationPrompt.slice(0, 100));
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          const logger = getLogger();
+          if (authInfo && authInfo.extra) {
+            if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+              logger.error(authInfo.extra.rateLimit);
+              span.setAttribute('ratelimit.error', true);
+              span.end();
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: authInfo.extra.rateLimit as string,
+                  },
+                ],
+                isError: true,
+              } as {
+                content: { type: 'text'; text: string }[];
+                isError: boolean;
+              };
+            }
+          }
+          try {
+            const result = await generateExtractSchema({
+              token: authInfo!.token,
+              fileId: args.fileId,
+              generationPrompt: args.generationPrompt,
+              projectId: args.projectId,
+            });
+            logger.info(
+              `Successfully generated schema for ${redactFileId(args.fileId)}`
+            );
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Generated JSON schema for extraction:\n\n\`\`\`json\n${result[0]}\n\`\`\`\n\nConfiguration ID: ${result[1]}.\nIf you are satisfied with the generated schema, use the configuration ID to call the 'extract' tool to actually extract the structured data`,
+                },
+              ],
+            } as {
+              content: { type: 'text'; text: string }[];
+            };
+          } catch (err) {
+            logger.error(
+              `An error occurred while generating JSON schema: ${err}`
+            );
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
+        }
+      );
+    }
+  );
+
+  server.tool(
+    'extractFile',
+    'Extract structured data from a file based on the configuration created with the `generateExtractionConfig` tool. Returns the extracted structured data.',
+    {
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file to extract, as returned by the file upload tool or provided by the user'
+        ),
+      configurationId: z
+        .string()
+        .describe(
+          'ID of the configuration to use to extract data from the file, as provided by the `generateExtractionConfig` tool.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.splitFile', async (span) => {
+        span.setAttribute('tool.file_id', redactFileId(args.fileId));
+        span.setAttribute(
+          'tool.config_name',
+          redactFileId(args.configurationId)
+        );
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        try {
+          const result = await extract({
+            token: authInfo!.token,
+            fileId: args.fileId,
+            projectId: args.projectId,
+            configurationId: args.configurationId,
+          });
+          logger.info(`Successfully extracted ${redactFileId(args.fileId)}`);
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
               },
             ],
           } as {
