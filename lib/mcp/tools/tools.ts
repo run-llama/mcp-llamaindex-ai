@@ -4,7 +4,12 @@ import {
   extract,
   generateExtractSchema,
   getProjects,
+  grepFileFromIndex,
+  listIndexes,
   parseFile,
+  readFileFromIndex,
+  retrieveFromIndex,
+  searchFilesFromIndex,
   splitFile,
   uploadFile,
 } from '@/lib/business/llamaparse';
@@ -648,7 +653,7 @@ export function registerLlamaParseTools(server: McpServer) {
         ),
     },
     async (args, extra) => {
-      return tracer.startActiveSpan('tool.splitFile', async (span) => {
+      return tracer.startActiveSpan('tool.extractFile', async (span) => {
         span.setAttribute('tool.file_id', redactFileId(args.fileId));
         span.setAttribute(
           'tool.config_name',
@@ -696,7 +701,410 @@ export function registerLlamaParseTools(server: McpServer) {
             content: { type: 'text'; text: string }[];
           };
         } catch (err) {
-          logger.error(`An error occurred while splitting: ${err}`);
+          logger.error(`An error occurred while extracting data: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+
+  server.tool(
+    'listIndexes',
+    'List all the available indexes on the LlamaParse Platform. Indexes are vector-indexed directories with the possibility of searching/reading/grepping files and performing retrieval.',
+    {
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.listIndexes', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        try {
+          const result = await listIndexes({
+            authToken: authInfo!.token,
+            projectId: args.projectId ?? null,
+          });
+          logger.info(`Successfully listed indexes`);
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while listing indexes: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+
+  server.tool(
+    'searchFilesFromIndex',
+    'Search files within an index. Optionally provide the file name to filter for or a substring that should be contained in the file name',
+    {
+      indexId: z
+        .string()
+        .describe('Index ID, as provided by the listIndexes tool'),
+      fileName: z
+        .string()
+        .optional()
+        .describe('Extact match for the file name to search for'),
+      fileNameContains: z
+        .string()
+        .optional()
+        .describe(
+          'Substring contained in the file name to search for (recommended using over fileName)'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.searchFilesFromIndex',
+        async (span) => {
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          span.setAttribute('tool.index_id', redactFileId(args.indexId));
+          const logger = getLogger();
+          if (authInfo && authInfo.extra) {
+            if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+              logger.error(authInfo.extra.rateLimit);
+              span.setAttribute('ratelimit.error', true);
+              span.end();
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: authInfo.extra.rateLimit as string,
+                  },
+                ],
+                isError: true,
+              } as {
+                content: { type: 'text'; text: string }[];
+                isError: boolean;
+              };
+            }
+          }
+          try {
+            const result = await searchFilesFromIndex({
+              authToken: authInfo!.token,
+              projectId: args.projectId ?? null,
+              indexId: args.indexId,
+              fileName: args.fileName ?? null,
+              fileNameContains: args.fileNameContains ?? null,
+            });
+            logger.info(`Successfully searched files`);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: result,
+                },
+              ],
+            } as {
+              content: { type: 'text'; text: string }[];
+            };
+          } catch (err) {
+            logger.error(`An error occurred while searching for files: ${err}`);
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
+        }
+      );
+    }
+  );
+
+  server.tool(
+    'readFileFromIndex',
+    'Read the content of a file from an index, providing its file ID and, optionally, an offset and a maximum length (in characters) to read.',
+    {
+      indexId: z
+        .string()
+        .describe('Index ID, as provided by the listIndexes tool'),
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file to read, as obtained by the searchFilesFromIndex tool'
+        ),
+      offset: z
+        .number()
+        .optional()
+        .describe('Offset (in characters) from which to read the file from'),
+      maxLength: z
+        .number()
+        .optional()
+        .describe(
+          'Maximum length (in characters) to read starting from the offset.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.readFileFromIndex', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute('tool.index_id', redactFileId(args.indexId));
+        span.setAttribute('tool.file_id', redactFileId(args.fileId));
+        const logger = getLogger();
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        try {
+          const result = await readFileFromIndex({
+            authToken: authInfo!.token,
+            projectId: args.projectId ?? null,
+            indexId: args.indexId,
+            fileId: args.fileId,
+            offset: args.offset ?? null,
+            maxLength: args.maxLength ?? null,
+          });
+          logger.info(`Successfully read file`);
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while reading the file: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+
+  server.tool(
+    'grepFileFromIndex',
+    'Grep the content of a file from an index, providing its file ID, the pattern to grep for and, optionally, a number of context characters and a maximum number of grep matches to retrieve',
+    {
+      indexId: z
+        .string()
+        .describe('Index ID, as provided by the listIndexes tool'),
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file to read, as obtained by the searchFilesFromIndex tool'
+        ),
+      pattern: z.string().describe('Pattern to grep the file with'),
+      contextChars: z
+        .number()
+        .optional()
+        .describe(
+          'Context (in characters) to retrieve along with the grep match'
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe('Maximum number of grep matches to retrieve'),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.grepFileFromIndex', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute('tool.index_id', redactFileId(args.indexId));
+        span.setAttribute('tool.file_id', redactFileId(args.fileId));
+        span.setAttribute('tool.grep_pattern', args.pattern);
+        const logger = getLogger();
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        try {
+          const result = await grepFileFromIndex({
+            authToken: authInfo!.token,
+            projectId: args.projectId ?? null,
+            indexId: args.indexId,
+            fileId: args.fileId,
+            pattern: args.pattern,
+            limit: args.limit ?? null,
+            contextChars: args.contextChars ?? null,
+          });
+          logger.info(`Successfully grepped file`);
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while grepping the file: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+
+  server.tool(
+    'retrieveFromIndex',
+    'Perform hybrid search on the index, providing a query and, optionally, the top K documents to retrieve and the top N documents to rerank',
+    {
+      indexId: z
+        .string()
+        .describe('Index ID, as provided by the listIndexes tool'),
+      query: z.string().describe('Query to search for'),
+      topK: z
+        .number()
+        .optional()
+        .describe('Top K documents to retrieve. Defaults to 10.'),
+      rerankTopN: z
+        .number()
+        .optional()
+        .describe(
+          'Top N documents to rerank. If not provided, reranking will be disabled.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.retrieveFromIndex', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute('tool.index_id', redactFileId(args.indexId));
+        span.setAttribute('tool.query', redactFileId(args.query));
+        const logger = getLogger();
+        if (authInfo && authInfo.extra) {
+          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+            logger.error(authInfo.extra.rateLimit);
+            span.setAttribute('ratelimit.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: authInfo.extra.rateLimit as string,
+                },
+              ],
+              isError: true,
+            } as {
+              content: { type: 'text'; text: string }[];
+              isError: boolean;
+            };
+          }
+        }
+        try {
+          const result = await retrieveFromIndex({
+            authToken: authInfo!.token,
+            projectId: args.projectId ?? null,
+            indexId: args.indexId,
+            query: args.query,
+            topK: args.topK ?? null,
+            rerankTopN: args.rerankTopN ?? null,
+          });
+          logger.info(`Successfully retrieved from index`);
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(
+            `An error occurred while retrieving from the index: ${err}`
+          );
           span.setAttribute('tool.error', true);
           span.end();
           throw err;

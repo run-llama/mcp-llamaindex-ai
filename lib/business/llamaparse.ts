@@ -6,6 +6,7 @@ import {
   SplitCategoryType,
   SplitResult,
 } from './types';
+import { RetrievalGrepResponse } from '@llamaindex/llama-cloud/resources/beta.js';
 
 const MaximumWaitingTime: number = 1800 * 1000;
 const MaxDelay: number = 60;
@@ -293,4 +294,207 @@ export async function extract({
   }
 
   return JSON.stringify(result, undefined, 2);
+}
+
+export async function listIndexes({
+  authToken,
+  projectId = null,
+}: {
+  authToken: string;
+  projectId?: string | null;
+}) {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  let pageToken: string | undefined = undefined;
+  const indexes: { name: string; indexId: string; description: string }[] = [];
+  while (true) {
+    const response = await client.beta.indexes.list({
+      project_id: projectId,
+      page_token: pageToken,
+    });
+    const idxs = response.items.map((i) => {
+      return {
+        name: i.name,
+        indexId: i.export_config_id,
+        description: i.description ?? 'no description',
+      };
+    });
+    indexes.push(...idxs);
+    if (response.next_page_token === '') {
+      break;
+    }
+    pageToken = response.next_page_token;
+  }
+  let s = '';
+  for (const idx of indexes) {
+    s += `- ${idx.name} (ID: ${idx.indexId}): ${idx.description}\n`;
+  }
+  return s;
+}
+
+export async function searchFilesFromIndex({
+  authToken,
+  indexId,
+  projectId = null,
+  fileName = null,
+  fileNameContains = null,
+}: {
+  authToken: string;
+  indexId: string;
+  projectId?: string | null;
+  fileName?: string | null;
+  fileNameContains?: string | null;
+}) {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  let pageToken: string | undefined = undefined;
+  const files: { name: string; fileId: string }[] = [];
+  while (true) {
+    const response = await client.beta.retrieval.find({
+      project_id: projectId,
+      file_name: fileName,
+      file_name_contains: fileNameContains,
+      index_id: indexId,
+      page_token: pageToken,
+    });
+    const fls = response.items.map((f) => {
+      return {
+        name: f.file_name,
+        fileId: f.file_id,
+      };
+    });
+    files.push(...fls);
+    if (response.next_page_token === '') {
+      break;
+    }
+    pageToken = response.next_page_token;
+  }
+  let s = `Files in Index ${indexId}`;
+  for (const fl of files) {
+    s += `- ${fl.name} (ID: ${fl.fileId})\n`;
+  }
+  return s;
+}
+
+export async function readFileFromIndex({
+  authToken,
+  indexId,
+  fileId,
+  projectId = null,
+  offset = null,
+  maxLength = null,
+}: {
+  authToken: string;
+  indexId: string;
+  fileId: string;
+  projectId?: string | null;
+  offset?: number | null;
+  maxLength?: number | null;
+}) {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  const response = await client.beta.retrieval.read({
+    project_id: projectId,
+    file_id: fileId,
+    index_id: indexId,
+    offset: offset ?? 0,
+    max_length: maxLength,
+  });
+  return response.content;
+}
+
+export async function grepFileFromIndex({
+  authToken,
+  indexId,
+  fileId,
+  pattern,
+  projectId = null,
+  contextChars = null,
+  limit = null,
+}: {
+  authToken: string;
+  indexId: string;
+  fileId: string;
+  pattern: string;
+  projectId?: string | null;
+  contextChars?: number | null;
+  limit?: number | null;
+}) {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  const grepMatches: RetrievalGrepResponse[] = [];
+  let pageToken: string | undefined = undefined;
+  while (true) {
+    const response = await client.beta.retrieval.grep({
+      project_id: projectId,
+      file_id: fileId,
+      index_id: indexId,
+      pattern: pattern,
+      context_chars: contextChars,
+      page_size: limit ?? undefined,
+      page_token: pageToken,
+    });
+    grepMatches.push(...response.items);
+    if (response.next_page_token === '') {
+      break;
+    }
+    pageToken = response.next_page_token;
+  }
+  let s = `Matches for \`${pattern}\` in ${fileId} from index ${indexId} (with ${contextChars ?? 0} context chars)`;
+  for (const m of grepMatches) {
+    s += `- ${m.content} (start: ${m.start_char}, end: ${m.start_char})\n`;
+  }
+  return s;
+}
+
+export async function retrieveFromIndex({
+  authToken,
+  indexId,
+  query,
+  projectId = null,
+  topK = null,
+  rerankTopN = null,
+}: {
+  authToken: string;
+  indexId: string;
+  query: string;
+  projectId?: string | null;
+  topK?: number | null;
+  rerankTopN?: number | null;
+}) {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+  });
+  const response = await client.beta.retrieval.retrieve({
+    project_id: projectId,
+    index_id: indexId,
+    query,
+    top_k: topK,
+    rerank: rerankTopN
+      ? { enabled: true, top_n: rerankTopN }
+      : { enabled: false },
+  });
+  let retrieved = '';
+  let i = 0;
+  for (const r of response.results) {
+    i += 1;
+    let content = r.content;
+    if (content.length > 500) {
+      content = content.slice(0, 500) + '...';
+    }
+    retrieved += `Match ${i} (retrieval score: ${r.score ?? 'NA'}; reranking score: ${r.rerank_score ?? 'NA'})\n\n${content}`;
+    if (r.metadata) {
+      retrieved += `\n\nMetadata:\n\n\`\`\`json\n${JSON.stringify(r.metadata, undefined, 2)}\n\`\`\``;
+    }
+  }
+  return retrieved;
 }
