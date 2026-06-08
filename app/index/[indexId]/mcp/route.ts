@@ -1,7 +1,7 @@
 import { buildMcpRouteHandler } from '@/lib/mcp/handler';
 import {
   registerGetUserProjectsTool,
-  registerSearchFilesFromIndexTool,
+  registerFindFilesInIndexTool,
   registerReadFileFromIndexTool,
   registerGrepFileFromIndexTool,
   registerRetrieveFromIndexTool,
@@ -28,7 +28,7 @@ async function route(request: Request, context: RouteContext) {
 
   const handler = buildMcpRouteHandler((server) => {
     registerGetUserProjectsTool(server);
-    registerSearchFilesFromIndexTool(server, indexId);
+    registerFindFilesInIndexTool(server, indexId);
     registerReadFileFromIndexTool(server, indexId);
     registerGrepFileFromIndexTool(server, indexId);
     registerRetrieveFromIndexTool(server, indexId);

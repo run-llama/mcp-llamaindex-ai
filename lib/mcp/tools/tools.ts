@@ -693,7 +693,7 @@ export function registerListIndexesTool(server: McpServer) {
   );
 }
 
-export function registerSearchFilesFromIndexTool(
+export function registerFindFilesInIndexTool(
   server: McpServer,
   fixedIndexId?: string
 ) {
@@ -727,7 +727,7 @@ export function registerSearchFilesFromIndexTool(
       );
   }
   server.tool(
-    'searchFilesFromIndex',
+    'findFilesInIndex',
     'Search files within an index. Optionally provide the file name to filter for or a substring that should be contained in the file name',
     schema,
     async (args, extra) => {
@@ -1045,7 +1045,7 @@ export function registerLlamaParseTools(server: McpServer) {
   registerGenerateExtractionConfigTool(server);
   registerExtractFileTool(server);
   registerListIndexesTool(server);
-  registerSearchFilesFromIndexTool(server);
+  registerFindFilesInIndexTool(server);
   registerReadFileFromIndexTool(server);
   registerGrepFileFromIndexTool(server);
   registerRetrieveFromIndexTool(server);
