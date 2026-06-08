@@ -16,16 +16,52 @@ import {
 import { Category, SplitCategory } from '@/lib/business/types';
 import { getLogger, redactFileId } from '@/lib/observability/logger';
 import { createMcpHandler } from '@vercel/mcp-adapter';
-import { trace } from '@opentelemetry/api';
+import { trace, Span } from '@opentelemetry/api';
+import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import z from 'zod';
 import { randomBytes } from 'node:crypto';
 import { getKVStore } from '@/lib/business/kv';
 
 const tracer = trace.getTracer('mcp-tools');
 
-type McpServer = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
+export type McpServer = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
 
-export function registerLlamaParseTools(server: McpServer) {
+// Shared helper: enforce auth + rate limit; returns a tool error response if rate
+// limited (so the caller can short-circuit), or null to proceed.
+type ToolErrorResponse = {
+  content: { type: 'text'; text: string }[];
+  isError: boolean;
+};
+
+function checkRateLimitedResponse(
+  authInfo: AuthInfo | undefined,
+  span: Span
+): ToolErrorResponse | null {
+  const logger = getLogger();
+  if (authInfo && authInfo.extra) {
+    if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
+      logger.error(authInfo.extra.rateLimit);
+      span.setAttribute('ratelimit.error', true);
+      span.end();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: authInfo.extra.rateLimit as string,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+  return null;
+}
+
+// =====================
+// Upload tools
+// =====================
+
+export function registerGetUploadUrlTool(server: McpServer) {
   server.tool(
     'getUploadUrl',
     'Get a pre-signed URL to upload a file to the LlamaParse S3 storage',
@@ -48,25 +84,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const logger = getLogger();
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         const token = randomBytes(48).toString('base64url');
         const kvStore = getKVStore();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -86,10 +105,7 @@ export function registerLlamaParseTools(server: McpServer) {
               },
             ],
             isError: true,
-          } as {
-            content: { type: 'text'; text: string }[];
-            isError: boolean;
-          };
+          } as ToolErrorResponse;
         }
         span.setAttribute('uploadUrl.success', true);
         span.end();
@@ -126,7 +142,9 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+export function registerUploadFileByUrlTool(server: McpServer) {
   server.tool(
     'uploadFileByUrl',
     'Upload a file to LLamaParse S3 storage providing a URL to download the file data. On upload completion, the file will be sent to LlamaParse S3 storage, so that it can be used for downstream processing tasks like parsing, classification or splitting.',
@@ -160,25 +178,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const logger = getLogger();
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         const response = await fetch(args.url, { method: 'GET' });
         logger.debug(`Downloading ${args.url}`);
         if (!response.ok) {
@@ -196,10 +197,7 @@ export function registerLlamaParseTools(server: McpServer) {
               },
             ],
             isError: true,
-          } as {
-            content: { type: 'text'; text: string }[];
-            isError: boolean;
-          };
+          } as ToolErrorResponse;
         }
         try {
           const fileData = await response.arrayBuffer();
@@ -234,7 +232,13 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+// =====================
+// Project tool
+// =====================
+
+export function registerGetUserProjectsTool(server: McpServer) {
   server.tool(
     'getUserProjects',
     'Get all the project IDs associated to a user so that you can use them to call tools from different project IDs',
@@ -244,25 +248,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await getProjects(authInfo!.token);
           logger.info(
@@ -288,7 +275,13 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+// =====================
+// Parse tool
+// =====================
+
+export function registerParseFileTool(server: McpServer) {
   server.tool(
     'parseFile',
     'Parse a file providing its file ID, retrieving markdown or plain text content of the file. Use with file IDs obtained with the uploadFileChunk tool or that the user provided',
@@ -329,25 +322,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await parseFile({
             authToken: authInfo!.token,
@@ -379,7 +355,13 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+// =====================
+// Classify tool
+// =====================
+
+export function registerClassifyFileTool(server: McpServer) {
   server.tool(
     'classifyFile',
     'Classify a file (based on specific categories) providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided',
@@ -412,25 +394,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await classifyFile({
             authToken: authInfo!.token,
@@ -460,7 +425,13 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+// =====================
+// Split tool
+// =====================
+
+export function registerSplitFileTool(server: McpServer) {
   server.tool(
     'splitFile',
     'Split a file into category-based segments providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided',
@@ -499,25 +470,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await splitFile({
             authToken: authInfo!.token,
@@ -547,7 +501,13 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+// =====================
+// Extract tools
+// =====================
+
+export function registerGenerateExtractionConfigTool(server: McpServer) {
   server.tool(
     'generateExtractionConfig',
     'Generate the configuration to extract structured data from a specific file using the Extract service from the LlamaParse Platform. Provide a prompt describing what the schema of the extracted data, the ID of the file to extract and, optionally, a project ID.',
@@ -578,25 +538,8 @@ export function registerLlamaParseTools(server: McpServer) {
           const { authInfo } = extra;
           ensureUserAuthenticated(authInfo);
           const logger = getLogger();
-          if (authInfo && authInfo.extra) {
-            if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-              logger.error(authInfo.extra.rateLimit);
-              span.setAttribute('ratelimit.error', true);
-              span.end();
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: authInfo.extra.rateLimit as string,
-                  },
-                ],
-                isError: true,
-              } as {
-                content: { type: 'text'; text: string }[];
-                isError: boolean;
-              };
-            }
-          }
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
           try {
             const result = await generateExtractSchema({
               token: authInfo!.token,
@@ -630,7 +573,9 @@ export function registerLlamaParseTools(server: McpServer) {
       );
     }
   );
+}
 
+export function registerExtractFileTool(server: McpServer) {
   server.tool(
     'extractFile',
     'Extract structured data from a file based on the configuration created with the `generateExtractionConfig` tool. Returns the extracted structured data.',
@@ -662,25 +607,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await extract({
             token: authInfo!.token,
@@ -709,7 +637,16 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+// =====================
+// Index tools
+// =====================
+// All index tools accept an optional `fixedIndexId`. When provided, the
+// registered tool removes `indexId` from its input schema and uses the
+// fixed value (useful for the /index/[indexId]/mcp route).
+
+export function registerListIndexesTool(server: McpServer) {
   server.tool(
     'listIndexes',
     'List all the available indexes on the LlamaParse Platform. Indexes are vector-indexed directories with the possibility of searching/reading/grepping files and performing retrieval.',
@@ -726,25 +663,8 @@ export function registerLlamaParseTools(server: McpServer) {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await listIndexes({
             authToken: authInfo!.token,
@@ -771,65 +691,65 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+export function registerFindFilesInIndexTool(
+  server: McpServer,
+  fixedIndexId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    fileName: z
+      .string()
+      .optional()
+      .describe('Extact match for the file name to search for'),
+    fileNameContains: z
+      .string()
+      .optional()
+      .describe(
+        'Substring contained in the file name to search for (recommended using over fileName)'
+      ),
+  };
+  if (!fixedIndexId) {
+    schema.indexId = z
+      .string()
+      .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
+  }
   server.tool(
-    'searchFilesFromIndex',
+    'findFilesInIndex',
     'Search files within an index. Optionally provide the file name to filter for or a substring that should be contained in the file name',
-    {
-      indexId: z
-        .string()
-        .describe('Index ID, as provided by the listIndexes tool'),
-      fileName: z
-        .string()
-        .optional()
-        .describe('Extact match for the file name to search for'),
-      fileNameContains: z
-        .string()
-        .optional()
-        .describe(
-          'Substring contained in the file name to search for (recommended using over fileName)'
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
+    schema,
     async (args, extra) => {
       return tracer.startActiveSpan(
         'tool.searchFilesFromIndex',
         async (span) => {
           const { authInfo } = extra;
           ensureUserAuthenticated(authInfo);
-          span.setAttribute('tool.index_id', redactFileId(args.indexId));
+          const indexId = fixedIndexId ?? (args.indexId as string);
+          const projectId = (args.projectId as string | undefined) ?? null;
+          span.setAttribute('tool.index_id', redactFileId(indexId));
           const logger = getLogger();
-          if (authInfo && authInfo.extra) {
-            if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-              logger.error(authInfo.extra.rateLimit);
-              span.setAttribute('ratelimit.error', true);
-              span.end();
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: authInfo.extra.rateLimit as string,
-                  },
-                ],
-                isError: true,
-              } as {
-                content: { type: 'text'; text: string }[];
-                isError: boolean;
-              };
-            }
-          }
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
           try {
             const result = await searchFilesFromIndex({
               authToken: authInfo!.token,
-              projectId: args.projectId ?? null,
-              indexId: args.indexId,
-              fileName: args.fileName ?? null,
-              fileNameContains: args.fileNameContains ?? null,
+              projectId,
+              indexId,
+              fileName: (args.fileName as string | undefined) ?? null,
+              fileNameContains:
+                (args.fileNameContains as string | undefined) ?? null,
             });
             logger.info(`Successfully searched files`);
             span.end();
@@ -853,70 +773,69 @@ export function registerLlamaParseTools(server: McpServer) {
       );
     }
   );
+}
 
+export function registerReadFileFromIndexTool(
+  server: McpServer,
+  fixedIndexId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    fileId: z
+      .string()
+      .describe(
+        'ID of the file to read, as obtained by the searchFilesFromIndex tool'
+      ),
+    offset: z
+      .number()
+      .optional()
+      .describe('Offset (in characters) from which to read the file from'),
+    maxLength: z
+      .number()
+      .optional()
+      .describe(
+        'Maximum length (in characters) to read starting from the offset.'
+      ),
+  };
+  if (!fixedIndexId) {
+    schema.indexId = z
+      .string()
+      .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
+  }
   server.tool(
     'readFileFromIndex',
     'Read the content of a file from an index, providing its file ID and, optionally, an offset and a maximum length (in characters) to read.',
-    {
-      indexId: z
-        .string()
-        .describe('Index ID, as provided by the listIndexes tool'),
-      fileId: z
-        .string()
-        .describe(
-          'ID of the file to read, as obtained by the searchFilesFromIndex tool'
-        ),
-      offset: z
-        .number()
-        .optional()
-        .describe('Offset (in characters) from which to read the file from'),
-      maxLength: z
-        .number()
-        .optional()
-        .describe(
-          'Maximum length (in characters) to read starting from the offset.'
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
+    schema,
     async (args, extra) => {
       return tracer.startActiveSpan('tool.readFileFromIndex', async (span) => {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        span.setAttribute('tool.index_id', redactFileId(args.indexId));
-        span.setAttribute('tool.file_id', redactFileId(args.fileId));
+        const indexId = fixedIndexId ?? (args.indexId as string);
+        const projectId = (args.projectId as string | undefined) ?? null;
+        span.setAttribute('tool.index_id', redactFileId(indexId));
+        span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await readFileFromIndex({
             authToken: authInfo!.token,
-            projectId: args.projectId ?? null,
-            indexId: args.indexId,
-            fileId: args.fileId,
-            offset: args.offset ?? null,
-            maxLength: args.maxLength ?? null,
+            projectId,
+            indexId,
+            fileId: args.fileId as string,
+            offset: (args.offset as number | undefined) ?? null,
+            maxLength: (args.maxLength as number | undefined) ?? null,
           });
           logger.info(`Successfully read file`);
           span.end();
@@ -939,73 +858,72 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+export function registerGrepFileFromIndexTool(
+  server: McpServer,
+  fixedIndexId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    fileId: z
+      .string()
+      .describe(
+        'ID of the file to read, as obtained by the searchFilesFromIndex tool'
+      ),
+    pattern: z.string().describe('Pattern to grep the file with'),
+    contextChars: z
+      .number()
+      .optional()
+      .describe(
+        'Context (in characters) to retrieve along with the grep match'
+      ),
+    limit: z
+      .number()
+      .optional()
+      .describe('Maximum number of grep matches to retrieve'),
+  };
+  if (!fixedIndexId) {
+    schema.indexId = z
+      .string()
+      .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
+  }
   server.tool(
     'grepFileFromIndex',
     'Grep the content of a file from an index, providing its file ID, the pattern to grep for and, optionally, a number of context characters and a maximum number of grep matches to retrieve',
-    {
-      indexId: z
-        .string()
-        .describe('Index ID, as provided by the listIndexes tool'),
-      fileId: z
-        .string()
-        .describe(
-          'ID of the file to read, as obtained by the searchFilesFromIndex tool'
-        ),
-      pattern: z.string().describe('Pattern to grep the file with'),
-      contextChars: z
-        .number()
-        .optional()
-        .describe(
-          'Context (in characters) to retrieve along with the grep match'
-        ),
-      limit: z
-        .number()
-        .optional()
-        .describe('Maximum number of grep matches to retrieve'),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
+    schema,
     async (args, extra) => {
       return tracer.startActiveSpan('tool.grepFileFromIndex', async (span) => {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        span.setAttribute('tool.index_id', redactFileId(args.indexId));
-        span.setAttribute('tool.file_id', redactFileId(args.fileId));
-        span.setAttribute('tool.grep_pattern', args.pattern);
+        const indexId = fixedIndexId ?? (args.indexId as string);
+        const projectId = (args.projectId as string | undefined) ?? null;
+        span.setAttribute('tool.index_id', redactFileId(indexId));
+        span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+        span.setAttribute('tool.grep_pattern', args.pattern as string);
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await grepFileFromIndex({
             authToken: authInfo!.token,
-            projectId: args.projectId ?? null,
-            indexId: args.indexId,
-            fileId: args.fileId,
-            pattern: args.pattern,
-            limit: args.limit ?? null,
-            contextChars: args.contextChars ?? null,
+            projectId,
+            indexId,
+            fileId: args.fileId as string,
+            pattern: args.pattern as string,
+            limit: (args.limit as number | undefined) ?? null,
+            contextChars: (args.contextChars as number | undefined) ?? null,
           });
           logger.info(`Successfully grepped file`);
           span.end();
@@ -1028,66 +946,65 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
 
+export function registerRetrieveFromIndexTool(
+  server: McpServer,
+  fixedIndexId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    query: z.string().describe('Query to search for'),
+    topK: z
+      .number()
+      .optional()
+      .describe('Top K documents to retrieve. Defaults to 10.'),
+    rerankTopN: z
+      .number()
+      .optional()
+      .describe(
+        'Top N documents to rerank. If not provided, reranking will be disabled.'
+      ),
+  };
+  if (!fixedIndexId) {
+    schema.indexId = z
+      .string()
+      .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
+  }
   server.tool(
     'retrieveFromIndex',
     'Perform hybrid search on the index, providing a query and, optionally, the top K documents to retrieve and the top N documents to rerank',
-    {
-      indexId: z
-        .string()
-        .describe('Index ID, as provided by the listIndexes tool'),
-      query: z.string().describe('Query to search for'),
-      topK: z
-        .number()
-        .optional()
-        .describe('Top K documents to retrieve. Defaults to 10.'),
-      rerankTopN: z
-        .number()
-        .optional()
-        .describe(
-          'Top N documents to rerank. If not provided, reranking will be disabled.'
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
+    schema,
     async (args, extra) => {
       return tracer.startActiveSpan('tool.retrieveFromIndex', async (span) => {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        span.setAttribute('tool.index_id', redactFileId(args.indexId));
-        span.setAttribute('tool.query', redactFileId(args.query));
+        const indexId = fixedIndexId ?? (args.indexId as string);
+        const projectId = (args.projectId as string | undefined) ?? null;
+        span.setAttribute('tool.index_id', redactFileId(indexId));
+        span.setAttribute('tool.query', redactFileId(args.query as string));
         const logger = getLogger();
-        if (authInfo && authInfo.extra) {
-          if ('rateLimit' in authInfo.extra && authInfo.extra.rateLimit) {
-            logger.error(authInfo.extra.rateLimit);
-            span.setAttribute('ratelimit.error', true);
-            span.end();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: authInfo.extra.rateLimit as string,
-                },
-              ],
-              isError: true,
-            } as {
-              content: { type: 'text'; text: string }[];
-              isError: boolean;
-            };
-          }
-        }
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
         try {
           const result = await retrieveFromIndex({
             authToken: authInfo!.token,
-            projectId: args.projectId ?? null,
-            indexId: args.indexId,
-            query: args.query,
-            topK: args.topK ?? null,
-            rerankTopN: args.rerankTopN ?? null,
+            projectId,
+            indexId,
+            query: args.query as string,
+            topK: (args.topK as number | undefined) ?? null,
+            rerankTopN: (args.rerankTopN as number | undefined) ?? null,
           });
           logger.info(`Successfully retrieved from index`);
           span.end();
@@ -1112,4 +1029,24 @@ export function registerLlamaParseTools(server: McpServer) {
       });
     }
   );
+}
+
+// =====================
+// Aggregate registration (backwards-compatible: all tools)
+// =====================
+
+export function registerLlamaParseTools(server: McpServer) {
+  registerGetUploadUrlTool(server);
+  registerUploadFileByUrlTool(server);
+  registerGetUserProjectsTool(server);
+  registerParseFileTool(server);
+  registerClassifyFileTool(server);
+  registerSplitFileTool(server);
+  registerGenerateExtractionConfigTool(server);
+  registerExtractFileTool(server);
+  registerListIndexesTool(server);
+  registerFindFilesInIndexTool(server);
+  registerReadFileFromIndexTool(server);
+  registerGrepFileFromIndexTool(server);
+  registerRetrieveFromIndexTool(server);
 }
