@@ -708,17 +708,23 @@ export function registerSearchFilesFromIndexTool(
       .describe(
         'Substring contained in the file name to search for (recommended using over fileName)'
       ),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedIndexId) {
     schema.indexId = z
       .string()
       .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
   }
   server.tool(
     'searchFilesFromIndex',
@@ -731,6 +737,7 @@ export function registerSearchFilesFromIndexTool(
           const { authInfo } = extra;
           ensureUserAuthenticated(authInfo);
           const indexId = fixedIndexId ?? (args.indexId as string);
+          const projectId = (args.projectId as string | undefined) ?? null;
           span.setAttribute('tool.index_id', redactFileId(indexId));
           const logger = getLogger();
           const rl = checkRateLimitedResponse(authInfo, span);
@@ -738,7 +745,7 @@ export function registerSearchFilesFromIndexTool(
           try {
             const result = await searchFilesFromIndex({
               authToken: authInfo!.token,
-              projectId: (args.projectId as string | undefined) ?? null,
+              projectId,
               indexId,
               fileName: (args.fileName as string | undefined) ?? null,
               fileNameContains:
@@ -788,17 +795,23 @@ export function registerReadFileFromIndexTool(
       .describe(
         'Maximum length (in characters) to read starting from the offset.'
       ),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedIndexId) {
     schema.indexId = z
       .string()
       .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
   }
   server.tool(
     'readFileFromIndex',
@@ -809,6 +822,7 @@ export function registerReadFileFromIndexTool(
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const indexId = fixedIndexId ?? (args.indexId as string);
+        const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
         const logger = getLogger();
@@ -817,7 +831,7 @@ export function registerReadFileFromIndexTool(
         try {
           const result = await readFileFromIndex({
             authToken: authInfo!.token,
-            projectId: (args.projectId as string | undefined) ?? null,
+            projectId,
             indexId,
             fileId: args.fileId as string,
             offset: (args.offset as number | undefined) ?? null,
@@ -867,17 +881,23 @@ export function registerGrepFileFromIndexTool(
       .number()
       .optional()
       .describe('Maximum number of grep matches to retrieve'),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedIndexId) {
     schema.indexId = z
       .string()
       .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
   }
   server.tool(
     'grepFileFromIndex',
@@ -888,6 +908,7 @@ export function registerGrepFileFromIndexTool(
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const indexId = fixedIndexId ?? (args.indexId as string);
+        const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
         span.setAttribute('tool.grep_pattern', args.pattern as string);
@@ -897,7 +918,7 @@ export function registerGrepFileFromIndexTool(
         try {
           const result = await grepFileFromIndex({
             authToken: authInfo!.token,
-            projectId: (args.projectId as string | undefined) ?? null,
+            projectId,
             indexId,
             fileId: args.fileId as string,
             pattern: args.pattern as string,
@@ -943,17 +964,23 @@ export function registerRetrieveFromIndexTool(
       .describe(
         'Top N documents to rerank. If not provided, reranking will be disabled.'
       ),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedIndexId) {
     schema.indexId = z
       .string()
       .describe('Index ID, as provided by the listIndexes tool');
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe(
+        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
+      );
   }
   server.tool(
     'retrieveFromIndex',
@@ -964,6 +991,7 @@ export function registerRetrieveFromIndexTool(
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const indexId = fixedIndexId ?? (args.indexId as string);
+        const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.query', redactFileId(args.query as string));
         const logger = getLogger();
@@ -972,7 +1000,7 @@ export function registerRetrieveFromIndexTool(
         try {
           const result = await retrieveFromIndex({
             authToken: authInfo!.token,
-            projectId: (args.projectId as string | undefined) ?? null,
+            projectId,
             indexId,
             query: args.query as string,
             topK: (args.topK as number | undefined) ?? null,
