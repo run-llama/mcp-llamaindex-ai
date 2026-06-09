@@ -102,26 +102,42 @@ export async function classifyFile({
   categories,
   mode = undefined,
   projectId = undefined,
+  configurationId = undefined,
 }: {
   authToken: string;
   fileId: string;
-  categories: CategoryType[];
+  categories?: CategoryType[];
   mode?: 'FAST' | undefined;
   projectId?: string | undefined;
+  configurationId?: string | undefined;
 }) {
   const client = new LlamaCloud({
     apiKey: authToken,
     baseURL: process.env.LLAMA_CLOUD_BASE_URL,
   });
 
-  const job = await client.classify.create({
-    file_input: fileId,
-    configuration: {
-      mode,
-      rules: categories,
-    },
-    project_id: projectId,
-  });
+  if (!configurationId && !categories) {
+    throw new Error(
+      'classifyFile requires either `categories` or a `configurationId`'
+    );
+  }
+
+  const job = await client.classify.create(
+    configurationId
+      ? {
+          file_input: fileId,
+          configuration_id: configurationId,
+          project_id: projectId,
+        }
+      : {
+          file_input: fileId,
+          configuration: {
+            mode,
+            rules: categories!,
+          },
+          project_id: projectId,
+        }
+  );
 
   const baseDelay = 0.1;
   const start = Date.now();
@@ -162,28 +178,44 @@ export async function splitFile({
   categories,
   allowUnacategorized = undefined,
   projectId = undefined,
+  configurationId = undefined,
 }: {
   authToken: string;
   fileId: string;
-  categories: SplitCategoryType[];
+  categories?: SplitCategoryType[];
   allowUnacategorized?: 'include' | 'omit' | 'forbid' | undefined;
   projectId?: string | undefined;
+  configurationId?: string | undefined;
 }) {
   const client = new LlamaCloud({
     apiKey: authToken,
     baseURL: process.env.LLAMA_CLOUD_BASE_URL,
   });
 
-  const job = await client.beta.split.create({
-    document_input: { type: 'file_id', value: fileId },
-    configuration: {
-      categories,
-      splitting_strategy: {
-        allow_uncategorized: allowUnacategorized ?? 'include',
-      },
-    },
-    project_id: projectId,
-  });
+  if (!configurationId && !categories) {
+    throw new Error(
+      'splitFile requires either `categories` or a `configurationId`'
+    );
+  }
+
+  const job = await client.beta.split.create(
+    configurationId
+      ? {
+          document_input: { type: 'file_id', value: fileId },
+          configuration_id: configurationId,
+          project_id: projectId,
+        }
+      : {
+          document_input: { type: 'file_id', value: fileId },
+          configuration: {
+            categories: categories!,
+            splitting_strategy: {
+              allow_uncategorized: allowUnacategorized ?? 'include',
+            },
+          },
+          project_id: projectId,
+        }
+  );
 
   const result = await client.beta.split.waitForCompletion(job.id, {
     project_id: projectId,

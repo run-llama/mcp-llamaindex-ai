@@ -45,6 +45,14 @@ async function applyRateLimit(request: Request): Promise<Response | null> {
 const jwksUrl = new URL(`https://api.workos.com/sso/jwks/${clientId}`);
 const JWKS = createRemoteJWKSet(jwksUrl);
 
+type McpServerInfo = {
+  instructions: string;
+  serverInfo: {
+    name: string;
+    version: string;
+  };
+};
+
 /**
  * Build a Next.js route handler that exposes an MCP server over Streamable HTTP,
  * wrapped with WorkOS auth + rate limiting.
@@ -52,16 +60,18 @@ const JWKS = createRemoteJWKSet(jwksUrl);
  * @param register   Function that registers tools on the MCP server.
  * @param basePath   Base path under which the `/mcp` endpoint is mounted.
  *                   For example, basePath: '/parse' → endpoint '/parse/mcp'.
+ * @param serverInfo Information about the server, including name, instructions and version.
  */
 export function buildMcpRouteHandler(
   register: (server: McpServer) => void,
-  basePath: string
+  basePath: string,
+  serverInfo?: McpServerInfo
 ) {
   const handler = createMcpHandler(
     (server) => {
       register(server);
     },
-    {},
+    { ...serverInfo },
     { basePath }
   );
 

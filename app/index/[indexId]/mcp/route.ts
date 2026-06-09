@@ -26,13 +26,28 @@ type RouteContext = {
 async function route(request: Request, context: RouteContext) {
   const { indexId } = await context.params;
 
-  const handler = buildMcpRouteHandler((server) => {
-    registerGetUserProjectsTool(server);
-    registerFindFilesInIndexTool(server, indexId);
-    registerReadFileFromIndexTool(server, indexId);
-    registerGrepFileFromIndexTool(server, indexId);
-    registerRetrieveFromIndexTool(server, indexId);
-  }, `/index/${indexId}`);
+  const handler = buildMcpRouteHandler(
+    (server) => {
+      registerGetUserProjectsTool(server);
+      registerFindFilesInIndexTool(server, indexId);
+      registerReadFileFromIndexTool(server, indexId);
+      registerGrepFileFromIndexTool(server, indexId);
+      registerRetrieveFromIndexTool(server, indexId);
+    },
+    `/index/${indexId}`,
+    {
+      serverInfo: {
+        name: 'llamacloud-index-mcp',
+        version: '0.1.0',
+      },
+      instructions:
+        'LlamaCloud Index MCP server bound to a single index ' +
+        `(${indexId}). Use findFilesInIndex to list files, readFileFromIndex to fetch a ` +
+        'specific file’s parsed contents, grepFileFromIndex to search inside a file with a ' +
+        'regex/literal pattern, and retrieveFromIndex for semantic / hybrid retrieval across ' +
+        'the whole index. getUserProjects is available to fetch the user project associated with the index ID.',
+    }
+  );
 
   return handler(request);
 }
