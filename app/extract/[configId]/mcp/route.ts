@@ -22,12 +22,26 @@ type RouteContext = {
 async function route(request: Request, context: RouteContext) {
   const { configId } = await context.params;
 
-  const handler = buildMcpRouteHandler((server) => {
-    registerGetUserProjectsTool(server);
-    registerGetUploadUrlTool(server);
-    registerUploadFileByUrlTool(server);
-    registerExtractFileTool(server, configId);
-  }, `/extract/${configId}`);
+  const handler = buildMcpRouteHandler(
+    (server) => {
+      registerGetUserProjectsTool(server);
+      registerGetUploadUrlTool(server);
+      registerUploadFileByUrlTool(server);
+      registerExtractFileTool(server, configId);
+    },
+    `/extract/${configId}`,
+    {
+      serverInfo: {
+        name: 'llamacloud-extract-config-mcp',
+        version: '0.1.0',
+      },
+      instructions:
+        'LlamaExtract MCP server bound to a saved extraction configuration ' +
+        `(${configId}). The extractFile tool already knows the schema from the saved config, so ` +
+        'clients only need to upload a file (getUploadUrl + POST the file to the obtained URL) and call extractFile ' +
+        'with the resulting file id to get structured JSON output.',
+    }
+  );
 
   return handler(request);
 }

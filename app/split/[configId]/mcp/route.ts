@@ -24,12 +24,26 @@ type RouteContext = {
 async function route(request: Request, context: RouteContext) {
   const { configId } = await context.params;
 
-  const handler = buildMcpRouteHandler((server) => {
-    registerGetUserProjectsTool(server);
-    registerGetUploadUrlTool(server);
-    registerUploadFileByUrlTool(server);
-    registerSplitFileTool(server, configId);
-  }, `/split/${configId}`);
+  const handler = buildMcpRouteHandler(
+    (server) => {
+      registerGetUserProjectsTool(server);
+      registerGetUploadUrlTool(server);
+      registerUploadFileByUrlTool(server);
+      registerSplitFileTool(server, configId);
+    },
+    `/split/${configId}`,
+    {
+      serverInfo: {
+        name: 'llamacloud-split-config-mcp',
+        version: '0.1.0',
+      },
+      instructions:
+        'LlamaCloud Split MCP server bound to a saved split configuration ' +
+        `(${configId}). The splitFile tool already knows the categories and splitting strategy ` +
+        'from the saved config, so clients only need to upload a file (getUploadUrl + ' +
+        'uploadFileByUrl) and call splitFile with the resulting file id.',
+    }
+  );
 
   return handler(request);
 }

@@ -23,12 +23,26 @@ type RouteContext = {
 async function route(request: Request, context: RouteContext) {
   const { configId } = await context.params;
 
-  const handler = buildMcpRouteHandler((server) => {
-    registerGetUserProjectsTool(server);
-    registerGetUploadUrlTool(server);
-    registerUploadFileByUrlTool(server);
-    registerClassifyFileTool(server, configId);
-  }, `/classify/${configId}`);
+  const handler = buildMcpRouteHandler(
+    (server) => {
+      registerGetUserProjectsTool(server);
+      registerGetUploadUrlTool(server);
+      registerUploadFileByUrlTool(server);
+      registerClassifyFileTool(server, configId);
+    },
+    `/classify/${configId}`,
+    {
+      serverInfo: {
+        name: 'llamacloud-classify-config-mcp',
+        version: '0.1.0',
+      },
+      instructions:
+        'LlamaCloud Classify MCP server bound to a saved classifier configuration ' +
+        `(${configId}). The classifyFile tool already knows the categories from the saved config, ` +
+        'so clients only need to upload a file (getUploadUrl + POST the file to the obtained URL) and call ' +
+        'classifyFile with the resulting file id.',
+    }
+  );
 
   return handler(request);
 }
