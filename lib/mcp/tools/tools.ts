@@ -361,146 +361,168 @@ export function registerParseFileTool(server: McpServer) {
 // Classify tool
 // =====================
 
-export function registerClassifyFileTool(server: McpServer) {
-  server.tool(
-    'classifyFile',
-    'Classify a file (based on specific categories) providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided',
-    {
-      fileId: z
-        .string()
-        .describe(
-          'ID of the file to classify, as returned by the file upload tool or provided by the user'
-        ),
-      mode: z
-        .literal('FAST')
-        .optional()
-        .describe('Classification mode to use.'),
-      categories: z
-        .array(Category)
-        .describe(
-          'Array of categories for the file to be classfied as. Category types should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
-    async (args, extra) => {
-      return tracer.startActiveSpan('tool.classifyFile', async (span) => {
-        span.setAttribute('tool.file_id', redactFileId(args.fileId));
-        if (args.mode) span.setAttribute('tool.mode', args.mode);
-        const { authInfo } = extra;
-        ensureUserAuthenticated(authInfo);
-        const logger = getLogger();
-        const rl = checkRateLimitedResponse(authInfo, span);
-        if (rl) return rl;
-        try {
-          const result = await classifyFile({
-            authToken: authInfo!.token,
-            fileId: args.fileId,
-            mode: args.mode,
-            categories: args.categories,
-            projectId: args.projectId,
-          });
-          logger.info(`Successfully classified ${redactFileId(args.fileId)}`);
-          span.end();
-          return {
-            content: [
-              {
-                type: 'text',
-                text: result.asString(),
-              },
-            ],
-          } as {
-            content: { type: 'text'; text: string }[];
-          };
-        } catch (err) {
-          logger.error(`An error occurred while classifying: ${err}`);
-          span.setAttribute('tool.error', true);
-          span.end();
-          throw err;
-        }
-      });
-    }
-  );
+export function registerClassifyFileTool(
+  server: McpServer,
+  fixedConfigurationId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    fileId: z
+      .string()
+      .describe(
+        'ID of the file to classify, as returned by the file upload tool or provided by the user'
+      ),
+    projectId: z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      ),
+  };
+  if (!fixedConfigurationId) {
+    schema.mode = z
+      .literal('FAST')
+      .optional()
+      .describe('Classification mode to use.');
+    schema.categories = z
+      .array(Category)
+      .describe(
+        'Array of categories for the file to be classfied as. Category types should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
+      );
+  }
+  const description = fixedConfigurationId
+    ? `Classify a file using the saved classify configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories are pulled from the saved configuration.`
+    : 'Classify a file (based on specific categories) providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided';
+  server.tool('classifyFile', description, schema, async (args, extra) => {
+    return tracer.startActiveSpan('tool.classifyFile', async (span) => {
+      span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+      if (args.mode) span.setAttribute('tool.mode', args.mode as string);
+      if (fixedConfigurationId)
+        span.setAttribute('tool.config_id', redactFileId(fixedConfigurationId));
+      const { authInfo } = extra;
+      ensureUserAuthenticated(authInfo);
+      const logger = getLogger();
+      const rl = checkRateLimitedResponse(authInfo, span);
+      if (rl) return rl;
+      try {
+        const result = await classifyFile({
+          authToken: authInfo!.token,
+          fileId: args.fileId as string,
+          mode: args.mode as 'FAST' | undefined,
+          categories: args.categories as never,
+          projectId: args.projectId as string | undefined,
+          configurationId: fixedConfigurationId,
+        });
+        logger.info(
+          `Successfully classified ${redactFileId(args.fileId as string)}`
+        );
+        span.end();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result.asString(),
+            },
+          ],
+        } as {
+          content: { type: 'text'; text: string }[];
+        };
+      } catch (err) {
+        logger.error(`An error occurred while classifying: ${err}`);
+        span.setAttribute('tool.error', true);
+        span.end();
+        throw err;
+      }
+    });
+  });
 }
 
 // =====================
 // Split tool
 // =====================
 
-export function registerSplitFileTool(server: McpServer) {
-  server.tool(
-    'splitFile',
-    'Split a file into category-based segments providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided',
-    {
-      fileId: z
-        .string()
-        .describe(
-          'ID of the file to split, as returned by the file upload tool or provided by the user'
-        ),
-      allowUncategorized: z
-        .enum(['omit', 'include', 'forbid'])
-        .optional()
-        .describe(
-          'Whether to omit, include or forbid uncategorized results. If you forbid uncategorized results, you force categorization even when the confidence is low. Defaults to `include`'
-        ),
-      categories: z
-        .array(SplitCategory)
-        .describe(
-          'Array of categories for the file to be classfied as. Category names should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
-    async (args, extra) => {
-      return tracer.startActiveSpan('tool.splitFile', async (span) => {
-        span.setAttribute('tool.file_id', redactFileId(args.fileId));
-        if (args.allowUncategorized)
-          span.setAttribute(
-            'tool.allow_uncategorized',
-            args.allowUncategorized
-          );
-        const { authInfo } = extra;
-        ensureUserAuthenticated(authInfo);
-        const logger = getLogger();
-        const rl = checkRateLimitedResponse(authInfo, span);
-        if (rl) return rl;
-        try {
-          const result = await splitFile({
-            authToken: authInfo!.token,
-            fileId: args.fileId,
-            allowUnacategorized: args.allowUncategorized,
-            categories: args.categories,
-            projectId: args.projectId,
-          });
-          logger.info(`Successfully split ${redactFileId(args.fileId)}`);
-          span.end();
-          return {
-            content: [
-              {
-                type: 'text',
-                text: result.asString(),
-              },
-            ],
-          } as {
-            content: { type: 'text'; text: string }[];
-          };
-        } catch (err) {
-          logger.error(`An error occurred while splitting: ${err}`);
-          span.setAttribute('tool.error', true);
-          span.end();
-          throw err;
-        }
-      });
-    }
-  );
+export function registerSplitFileTool(
+  server: McpServer,
+  fixedConfigurationId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    fileId: z
+      .string()
+      .describe(
+        'ID of the file to split, as returned by the file upload tool or provided by the user'
+      ),
+    projectId: z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      ),
+  };
+  if (!fixedConfigurationId) {
+    schema.allowUncategorized = z
+      .enum(['omit', 'include', 'forbid'])
+      .optional()
+      .describe(
+        'Whether to omit, include or forbid uncategorized results. If you forbid uncategorized results, you force categorization even when the confidence is low. Defaults to `include`'
+      );
+    schema.categories = z
+      .array(SplitCategory)
+      .describe(
+        'Array of categories for the file to be classfied as. Category names should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
+      );
+  }
+  const description = fixedConfigurationId
+    ? `Split a file into category-based segments using the saved split configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories and splitting strategy are pulled from the saved configuration.`
+    : 'Split a file into category-based segments providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided';
+  server.tool('splitFile', description, schema, async (args, extra) => {
+    return tracer.startActiveSpan('tool.splitFile', async (span) => {
+      span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+      if (args.allowUncategorized)
+        span.setAttribute(
+          'tool.allow_uncategorized',
+          args.allowUncategorized as string
+        );
+      if (fixedConfigurationId)
+        span.setAttribute('tool.config_id', redactFileId(fixedConfigurationId));
+      const { authInfo } = extra;
+      ensureUserAuthenticated(authInfo);
+      const logger = getLogger();
+      const rl = checkRateLimitedResponse(authInfo, span);
+      if (rl) return rl;
+      try {
+        const result = await splitFile({
+          authToken: authInfo!.token,
+          fileId: args.fileId as string,
+          allowUnacategorized: args.allowUncategorized as
+            | 'omit'
+            | 'include'
+            | 'forbid'
+            | undefined,
+          categories: args.categories as never,
+          projectId: args.projectId as string | undefined,
+          configurationId: fixedConfigurationId,
+        });
+        logger.info(
+          `Successfully split ${redactFileId(args.fileId as string)}`
+        );
+        span.end();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result.asString(),
+            },
+          ],
+        } as {
+          content: { type: 'text'; text: string }[];
+        };
+      } catch (err) {
+        logger.error(`An error occurred while splitting: ${err}`);
+        span.setAttribute('tool.error', true);
+        span.end();
+        throw err;
+      }
+    });
+  });
 }
 
 // =====================
@@ -575,68 +597,73 @@ export function registerGenerateExtractionConfigTool(server: McpServer) {
   );
 }
 
-export function registerExtractFileTool(server: McpServer) {
-  server.tool(
-    'extractFile',
-    'Extract structured data from a file based on the configuration created with the `generateExtractionConfig` tool. Returns the extracted structured data.',
-    {
-      fileId: z
-        .string()
-        .describe(
-          'ID of the file to extract, as returned by the file upload tool or provided by the user'
-        ),
-      configurationId: z
-        .string()
-        .describe(
-          'ID of the configuration to use to extract data from the file, as provided by the `generateExtractionConfig` tool.'
-        ),
-      projectId: z
-        .string()
-        .optional()
-        .describe(
-          'Project ID that the tool should use. Uses the default project if not provided.'
-        ),
-    },
-    async (args, extra) => {
-      return tracer.startActiveSpan('tool.extractFile', async (span) => {
-        span.setAttribute('tool.file_id', redactFileId(args.fileId));
-        span.setAttribute(
-          'tool.config_name',
-          redactFileId(args.configurationId)
+export function registerExtractFileTool(
+  server: McpServer,
+  fixedConfigurationId?: string
+) {
+  const schema: Record<string, z.ZodTypeAny> = {
+    fileId: z
+      .string()
+      .describe(
+        'ID of the file to extract, as returned by the file upload tool or provided by the user'
+      ),
+    projectId: z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      ),
+  };
+  if (!fixedConfigurationId) {
+    schema.configurationId = z
+      .string()
+      .describe(
+        'ID of the configuration to use to extract data from the file, as provided by the `generateExtractionConfig` tool.'
+      );
+  }
+  const description = fixedConfigurationId
+    ? `Extract structured data from a file using the saved extraction configuration ${fixedConfigurationId}. Returns the extracted structured data.`
+    : 'Extract structured data from a file based on the configuration created with the `generateExtractionConfig` tool. Returns the extracted structured data.';
+  server.tool('extractFile', description, schema, async (args, extra) => {
+    return tracer.startActiveSpan('tool.extractFile', async (span) => {
+      const configurationId =
+        fixedConfigurationId ?? (args.configurationId as string);
+      span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+      span.setAttribute('tool.config_name', redactFileId(configurationId));
+      const { authInfo } = extra;
+      ensureUserAuthenticated(authInfo);
+      const logger = getLogger();
+      const rl = checkRateLimitedResponse(authInfo, span);
+      if (rl) return rl;
+      try {
+        const result = await extract({
+          token: authInfo!.token,
+          fileId: args.fileId as string,
+          projectId: args.projectId as string | undefined,
+          configurationId,
+        });
+        logger.info(
+          `Successfully extracted ${redactFileId(args.fileId as string)}`
         );
-        const { authInfo } = extra;
-        ensureUserAuthenticated(authInfo);
-        const logger = getLogger();
-        const rl = checkRateLimitedResponse(authInfo, span);
-        if (rl) return rl;
-        try {
-          const result = await extract({
-            token: authInfo!.token,
-            fileId: args.fileId,
-            projectId: args.projectId,
-            configurationId: args.configurationId,
-          });
-          logger.info(`Successfully extracted ${redactFileId(args.fileId)}`);
-          span.end();
-          return {
-            content: [
-              {
-                type: 'text',
-                text: result,
-              },
-            ],
-          } as {
-            content: { type: 'text'; text: string }[];
-          };
-        } catch (err) {
-          logger.error(`An error occurred while extracting data: ${err}`);
-          span.setAttribute('tool.error', true);
-          span.end();
-          throw err;
-        }
-      });
-    }
-  );
+        span.end();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result,
+            },
+          ],
+        } as {
+          content: { type: 'text'; text: string }[];
+        };
+      } catch (err) {
+        logger.error(`An error occurred while extracting data: ${err}`);
+        span.setAttribute('tool.error', true);
+        span.end();
+        throw err;
+      }
+    });
+  });
 }
 
 // =====================
