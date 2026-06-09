@@ -371,12 +371,6 @@ export function registerClassifyFileTool(
       .describe(
         'ID of the file to classify, as returned by the file upload tool or provided by the user'
       ),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedConfigurationId) {
     schema.mode = z
@@ -388,6 +382,16 @@ export function registerClassifyFileTool(
       .describe(
         'Array of categories for the file to be classfied as. Category types should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
       );
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe('Project ID that the tool should use.');
   }
   const description = fixedConfigurationId
     ? `Classify a file using the saved classify configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories are pulled from the saved configuration.`
@@ -450,12 +454,6 @@ export function registerSplitFileTool(
       .describe(
         'ID of the file to split, as returned by the file upload tool or provided by the user'
       ),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedConfigurationId) {
     schema.allowUncategorized = z
@@ -469,6 +467,16 @@ export function registerSplitFileTool(
       .describe(
         'Array of categories for the file to be classfied as. Category names should be lowercase and use snake_case. Category descriptions should be exaustive but not longer than 500 characters'
       );
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe('Project ID that the tool should use.');
   }
   const description = fixedConfigurationId
     ? `Split a file into category-based segments using the saved split configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories and splitting strategy are pulled from the saved configuration.`
@@ -607,12 +615,6 @@ export function registerExtractFileTool(
       .describe(
         'ID of the file to extract, as returned by the file upload tool or provided by the user'
       ),
-    projectId: z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      ),
   };
   if (!fixedConfigurationId) {
     schema.configurationId = z
@@ -620,6 +622,16 @@ export function registerExtractFileTool(
       .describe(
         'ID of the configuration to use to extract data from the file, as provided by the `generateExtractionConfig` tool.'
       );
+    schema.projectId = z
+      .string()
+      .optional()
+      .describe(
+        'Project ID that the tool should use. Uses the default project if not provided.'
+      );
+  } else {
+    schema.projectId = z
+      .string()
+      .describe('Project ID that the tool should use.');
   }
   const description = fixedConfigurationId
     ? `Extract structured data from a file using the saved extraction configuration ${fixedConfigurationId}. Returns the extracted structured data.`
