@@ -15,6 +15,7 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@llamaindex/liteparse": "^2.7.0",
     "@llamaindex/llama-cloud": "2.8.0",
     "@modelcontextprotocol/sdk": "1.15.0",
     "@opentelemetry/api": "^1.9.1",

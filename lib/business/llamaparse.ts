@@ -67,6 +67,7 @@ export async function parseFile({
   version = undefined,
   markdown = true,
   projectId = undefined,
+  pages = undefined,
 }: {
   authToken: string;
   fileId: string;
@@ -74,6 +75,7 @@ export async function parseFile({
   version?: undefined | string;
   markdown?: boolean;
   projectId?: string | undefined;
+  pages?: number[] | undefined;
 }): Promise<ParsingResult> {
   const client = new LlamaCloud({
     apiKey: authToken,
@@ -86,6 +88,9 @@ export async function parseFile({
     file_id: fileId,
     project_id: projectId,
     expand,
+    page_ranges: {
+      target_pages: pages ? pages.map((p) => p.toString()).join(",") : undefined
+    },
   });
   const parsingResult: ParsingResult = {};
   if (markdown) {

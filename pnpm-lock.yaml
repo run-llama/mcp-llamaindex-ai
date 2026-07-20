@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@llamaindex/liteparse':
+        specifier: ^2.7.0
+        version: 2.7.0
       '@llamaindex/llama-cloud':
         specifier: 2.8.0
         version: 2.8.0
@@ -594,6 +597,46 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@llamaindex/liteparse-darwin-arm64@2.7.0':
+    resolution: {integrity: sha512-gId5/uOD1i8DFx13sAZ8aqH1yOY14QucDH+6cSbF9xSKdlnDogVBZ2zhZEO0EU+rMEHURRD3gdFu2HBBUbbLrQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@llamaindex/liteparse-darwin-x64@2.7.0':
+    resolution: {integrity: sha512-SmUbaxBuahdVVHlRMeKNVNN3ql4adlKDgdNvbAzy1TzkbhS1PI8dj8rcnmBJOFD/3o9yp6q2SapRocv9V/rykQ==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@llamaindex/liteparse-linux-arm64-gnu@2.7.0':
+    resolution: {integrity: sha512-BDZfpgL3zPUyAoubGVdHSrcF8Apw+QcVljAPHIJR7fV5OKtWXXX9CgiFQyQ1S8i2LHRvwx6oTbHqVD0mC7ChhA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@llamaindex/liteparse-linux-x64-gnu@2.7.0':
+    resolution: {integrity: sha512-zn9gAQtH7nDb9xdNaoGzNS5gUkVvMq4/f3AodGKopxWgYXSjFf2rvwCPbxraoS6Q87DOaJ8a4ggNGzVLYHv3Zg==}
+    cpu: [x64]
+    os: [linux]
+
+  '@llamaindex/liteparse-linux-x64-musl@2.7.0':
+    resolution: {integrity: sha512-aLD/8qd1oPahwWrzO5+Y/5cra9eE4yjVSH2IWmYEYafirRJq1HrkLpLMOcBZvKgbjTnrLLm90+Mnz3u/dpevWw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@llamaindex/liteparse-win32-arm64-msvc@2.7.0':
+    resolution: {integrity: sha512-3aoNQQSAl927Ywi/nUQAdhPEHgnWNeoUOMIcanaqmxc9u/QRm4pmxwFzOrUclIum4JYf/LS/8c3N9Ou8w9OGlw==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@llamaindex/liteparse-win32-x64-msvc@2.7.0':
+    resolution: {integrity: sha512-rFDkmM+86mt1YRkWYWMFrfDoHMDzQ31hBRlBy8pR20JAAO05yq9PY5Hod/OuY6qHy2qiHBgs4gcVryWvdJGkow==}
+    cpu: [x64]
+    os: [win32]
+
+  '@llamaindex/liteparse@2.7.0':
+    resolution: {integrity: sha512-GUhiOrSFgiYpqqCMVHP7Knj8tQiMsDozM8VbjoO2orXms/QbUz2jHz4EWdrFfqZGCE23zV7bNfTUD71l8AY0qw==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
 
   '@llamaindex/llama-cloud@2.8.0':
     resolution: {integrity: sha512-L/Bao8ebVZpVwkpig54IlKEaFXYn4YoKhIWXtDqwul4Vxa8y+o9qvJL9qdWhpajrxPsHigTSPHn9C8OR80W+HA==}
@@ -1398,6 +1441,10 @@ packages:
   commander@11.1.0:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
     engines: {node: '>=16'}
+
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
@@ -4026,6 +4073,39 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@llamaindex/liteparse-darwin-arm64@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse-darwin-x64@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse-linux-arm64-gnu@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse-linux-x64-gnu@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse-linux-x64-musl@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse-win32-arm64-msvc@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse-win32-x64-msvc@2.7.0':
+    optional: true
+
+  '@llamaindex/liteparse@2.7.0':
+    dependencies:
+      commander: 12.1.0
+    optionalDependencies:
+      '@llamaindex/liteparse-darwin-arm64': 2.7.0
+      '@llamaindex/liteparse-darwin-x64': 2.7.0
+      '@llamaindex/liteparse-linux-arm64-gnu': 2.7.0
+      '@llamaindex/liteparse-linux-x64-gnu': 2.7.0
+      '@llamaindex/liteparse-linux-x64-musl': 2.7.0
+      '@llamaindex/liteparse-win32-arm64-msvc': 2.7.0
+      '@llamaindex/liteparse-win32-x64-msvc': 2.7.0
+
   '@llamaindex/llama-cloud@2.8.0': {}
 
   '@modelcontextprotocol/sdk@1.15.0':
@@ -4872,6 +4952,8 @@ snapshots:
       delayed-stream: 1.0.0
 
   commander@11.1.0: {}
+
+  commander@12.1.0: {}
 
   commander@4.1.1: {}
 
