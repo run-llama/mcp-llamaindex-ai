@@ -308,7 +308,10 @@ export function registerParseFileTool(server: McpServer) {
         .describe(
           'Whether to extract markdown or plain text. Defaults to true (extract markdown).'
         ),
-      pages: z.array(z.number()).optional().describe("Specific pages to limit the parsing operation to"),
+      pages: z
+        .array(z.number())
+        .optional()
+        .describe('Specific pages to limit the parsing operation to'),
       projectId: z
         .string()
         .optional()
@@ -334,7 +337,7 @@ export function registerParseFileTool(server: McpServer) {
             version: args.version,
             markdown: args.markdown,
             projectId: args.projectId,
-            pages: args.pages
+            pages: args.pages,
           });
           logger.info(`Successfully parsed ${redactFileId(args.fileId)}`);
           span.end();
@@ -369,17 +372,36 @@ export function registerLitParseTool(server: McpServer) {
     'parseWithLiteParse',
     'Parse a file with LiteParse, a fast, in-process parser that does not consume credits from the LlamaParse Platform. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user',
     {
-      fileId: z.string().describe("ID of the file to parse."),
-      pages: z.array(z.number()).optional().describe("Page numbers to limit the parsing operation to. 1-based."),
-      markdown: z.boolean().optional().describe("Whether the output text should be markdown-formatted or plain text"),
-      includeJson: z.boolean().optional().describe("Whether to include the JSON array of pages (with bboxes) in the parse result")
+      fileId: z.string().describe('ID of the file to parse.'),
+      pages: z
+        .array(z.number())
+        .optional()
+        .describe('Page numbers to limit the parsing operation to. 1-based.'),
+      markdown: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether the output text should be markdown-formatted or plain text'
+        ),
+      includeJson: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether to include the JSON array of pages (with bboxes) in the parse result'
+        ),
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.parseWithLiteParse', async (span) => {
         span.setAttribute('tool.file_id', redactFileId(args.fileId));
-        if (typeof args.markdown !== "undefined") span.setAttribute('tool.markdown', args.markdown);
-        if (typeof args.includeJson !== "undefined") span.setAttribute('tool.include_json', args.includeJson);
-        if (args.pages) span.setAttribute('tool.version', args.pages.map((p) => p.toString).join(", "));
+        if (typeof args.markdown !== 'undefined')
+          span.setAttribute('tool.markdown', args.markdown);
+        if (typeof args.includeJson !== 'undefined')
+          span.setAttribute('tool.include_json', args.includeJson);
+        if (args.pages)
+          span.setAttribute(
+            'tool.version',
+            args.pages.map((p) => p.toString).join(', ')
+          );
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
@@ -391,30 +413,33 @@ export function registerLitParseTool(server: McpServer) {
             fileId: args.fileId,
             markdown: args.markdown,
             pages: args.pages,
-            includeJson: args.includeJson
+            includeJson: args.includeJson,
           });
-          logger.info(`Successfully parsed ${redactFileId(args.fileId)} with LiteParse`);
+          logger.info(
+            `Successfully parsed ${redactFileId(args.fileId)} with LiteParse`
+          );
           span.end();
           return {
             content: [
               {
                 type: 'text',
-                text:
-                  JSON.stringify(result, undefined, 2),
+                text: JSON.stringify(result, undefined, 2),
               },
             ],
           } as {
             content: { type: 'text'; text: string }[];
           };
         } catch (err) {
-          logger.error(`An error occurred while parsing with LiteParse: ${err}`);
+          logger.error(
+            `An error occurred while parsing with LiteParse: ${err}`
+          );
           span.setAttribute('tool.error', true);
           span.end();
           throw err;
         }
       });
-    },
-  )
+    }
+  );
 }
 
 export function registerLitIsComplexTool(server: McpServer) {
@@ -422,43 +447,53 @@ export function registerLitIsComplexTool(server: McpServer) {
     'estimateFileComplexity',
     'Estimate the parsing complexity of a file (providing its file ID) using LiteParse. Returns a JSON object mapping each page with the LlamaParse tier it should be parsed with (or if you should use LiteParse), based on the parsing complexity and the need for OCR. Use in combination with parseFile and parseWithLiteParse. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user',
     {
-      fileId: z.string().describe("ID of the file whose parsing complexity you want to estimate."),
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file whose parsing complexity you want to estimate.'
+        ),
     },
     async (args, extra) => {
-      return tracer.startActiveSpan('tool.estimateFileComplexity', async (span) => {
-        span.setAttribute('tool.file_id', redactFileId(args.fileId));
-        const { authInfo } = extra;
-        ensureUserAuthenticated(authInfo);
-        const logger = getLogger();
-        const rl = checkRateLimitedResponse(authInfo, span);
-        if (rl) return rl;
-        try {
-          const result = await isComplex({
-            authToken: authInfo!.token,
-            fileId: args.fileId,
-          });
-          logger.info(`Successfully parsed ${redactFileId(args.fileId)} with LiteParse`);
-          span.end();
-          return {
-            content: [
-              {
-                type: 'text',
-                text:
-                  JSON.stringify(result, undefined, 2),
-              },
-            ],
-          } as {
-            content: { type: 'text'; text: string }[];
-          };
-        } catch (err) {
-          logger.error(`An error occurred while estimating the file complexity with LiteParse: ${err}`);
-          span.setAttribute('tool.error', true);
-          span.end();
-          throw err;
+      return tracer.startActiveSpan(
+        'tool.estimateFileComplexity',
+        async (span) => {
+          span.setAttribute('tool.file_id', redactFileId(args.fileId));
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          const logger = getLogger();
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
+          try {
+            const result = await isComplex({
+              authToken: authInfo!.token,
+              fileId: args.fileId,
+            });
+            logger.info(
+              `Successfully parsed ${redactFileId(args.fileId)} with LiteParse`
+            );
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, undefined, 2),
+                },
+              ],
+            } as {
+              content: { type: 'text'; text: string }[];
+            };
+          } catch (err) {
+            logger.error(
+              `An error occurred while estimating the file complexity with LiteParse: ${err}`
+            );
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
         }
-      });
-    },
-  )
+      );
+    }
+  );
 }
 
 // =====================

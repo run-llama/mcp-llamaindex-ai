@@ -89,7 +89,9 @@ export async function parseFile({
     project_id: projectId,
     expand,
     page_ranges: {
-      target_pages: pages ? pages.map((p) => p.toString()).join(",") : undefined
+      target_pages: pages
+        ? pages.map((p) => p.toString()).join(',')
+        : undefined,
     },
   });
   const parsingResult: ParsingResult = {};
