@@ -452,6 +452,12 @@ export function registerLitIsComplexTool(server: McpServer) {
         .describe(
           'ID of the file whose parsing complexity you want to estimate.'
         ),
+      includeLayout: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether or not to include layout signals in the complexity estimation. Defaults to false.'
+        ),
     },
     async (args, extra) => {
       return tracer.startActiveSpan(
@@ -467,6 +473,7 @@ export function registerLitIsComplexTool(server: McpServer) {
             const result = await isComplex({
               authToken: authInfo!.token,
               fileId: args.fileId,
+              includeLayout: args.includeLayout ?? false,
             });
             logger.info(
               `Successfully parsed ${redactFileId(args.fileId)} with LiteParse`
