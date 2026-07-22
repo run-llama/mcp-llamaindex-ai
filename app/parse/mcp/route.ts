@@ -4,16 +4,20 @@ import {
   registerUploadFileByUrlTool,
   registerGetUserProjectsTool,
   registerParseFileTool,
+  registerLitIsComplexTool,
+  registerLitParseTool,
 } from '@/lib/mcp/tools/tools';
 
 // Parse-only MCP server. Endpoint: /parse/mcp
-// Includes parseFile, the file upload helpers it needs, and getUserProjects.
+// Includes parseFile, parseFileWithLiteParse, estimateFileComplexity, the file upload helpers it needs, and getUserProjects.
 const authHandler = buildMcpRouteHandler(
   (server) => {
     registerGetUserProjectsTool(server);
     registerGetUploadUrlTool(server);
     registerUploadFileByUrlTool(server);
     registerParseFileTool(server);
+    registerLitIsComplexTool(server);
+    registerLitParseTool(server);
   },
   '/parse',
   {

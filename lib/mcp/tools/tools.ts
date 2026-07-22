@@ -21,6 +21,7 @@ import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import z from 'zod';
 import { randomBytes } from 'node:crypto';
 import { getKVStore } from '@/lib/business/kv';
+import { isComplex, litParse } from '@/lib/business/liteparse';
 
 const tracer = trace.getTracer('mcp-tools');
 
@@ -284,7 +285,7 @@ export function registerGetUserProjectsTool(server: McpServer) {
 export function registerParseFileTool(server: McpServer) {
   server.tool(
     'parseFile',
-    'Parse a file providing its file ID, retrieving markdown or plain text content of the file. Use with file IDs obtained with the uploadFileChunk tool or that the user provided',
+    'Parse a file providing its file ID, retrieving markdown or plain text content of the file. Use with file IDs obtained with the getUploadUrl/uploadFileByUrl tool or that the user provided',
     {
       fileId: z
         .string()
@@ -307,6 +308,10 @@ export function registerParseFileTool(server: McpServer) {
         .describe(
           'Whether to extract markdown or plain text. Defaults to true (extract markdown).'
         ),
+      pages: z
+        .array(z.number())
+        .optional()
+        .describe('Specific pages to limit the parsing operation to'),
       projectId: z
         .string()
         .optional()
@@ -332,6 +337,7 @@ export function registerParseFileTool(server: McpServer) {
             version: args.version,
             markdown: args.markdown,
             projectId: args.projectId,
+            pages: args.pages,
           });
           logger.info(`Successfully parsed ${redactFileId(args.fileId)}`);
           span.end();
@@ -353,6 +359,146 @@ export function registerParseFileTool(server: McpServer) {
           throw err;
         }
       });
+    }
+  );
+}
+
+// =====================
+// LiteParse tool
+// =====================
+
+export function registerLitParseTool(server: McpServer) {
+  server.tool(
+    'parseWithLiteParse',
+    'Parse a file with LiteParse, a fast, in-process parser that does not consume credits from the LlamaParse Platform. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user',
+    {
+      fileId: z.string().describe('ID of the file to parse.'),
+      pages: z
+        .array(z.number())
+        .optional()
+        .describe('Page numbers to limit the parsing operation to. 1-based.'),
+      markdown: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether the output text should be markdown-formatted or plain text'
+        ),
+      includeJson: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether to include the JSON array of pages (with bboxes) in the parse result'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.parseWithLiteParse', async (span) => {
+        span.setAttribute('tool.file_id', redactFileId(args.fileId));
+        if (typeof args.markdown !== 'undefined')
+          span.setAttribute('tool.markdown', args.markdown);
+        if (typeof args.includeJson !== 'undefined')
+          span.setAttribute('tool.include_json', args.includeJson);
+        if (args.pages)
+          span.setAttribute(
+            'tool.version',
+            args.pages.map((p) => p.toString).join(', ')
+          );
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await litParse({
+            authToken: authInfo!.token,
+            fileId: args.fileId,
+            markdown: args.markdown,
+            pages: args.pages,
+            includeJson: args.includeJson,
+          });
+          logger.info(
+            `Successfully parsed ${redactFileId(args.fileId)} with LiteParse`
+          );
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, undefined, 2),
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(
+            `An error occurred while parsing with LiteParse: ${err}`
+          );
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerLitIsComplexTool(server: McpServer) {
+  server.tool(
+    'estimateFileComplexity',
+    'Estimate the parsing complexity of a file (providing its file ID) using LiteParse. Returns a JSON object mapping each page with the LlamaParse tier it should be parsed with (or if you should use LiteParse), based on the parsing complexity and the need for OCR. Use in combination with parseFile and parseWithLiteParse. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user',
+    {
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file whose parsing complexity you want to estimate.'
+        ),
+      includeLayout: z
+        .boolean()
+        .optional()
+        .describe(
+          'Whether or not to include layout signals in the complexity estimation. Defaults to false.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.estimateFileComplexity',
+        async (span) => {
+          span.setAttribute('tool.file_id', redactFileId(args.fileId));
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          const logger = getLogger();
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
+          try {
+            const result = await isComplex({
+              authToken: authInfo!.token,
+              fileId: args.fileId,
+              includeLayout: args.includeLayout ?? false,
+            });
+            logger.info(
+              `Successfully parsed ${redactFileId(args.fileId)} with LiteParse`
+            );
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, undefined, 2),
+                },
+              ],
+            } as {
+              content: { type: 'text'; text: string }[];
+            };
+          } catch (err) {
+            logger.error(
+              `An error occurred while estimating the file complexity with LiteParse: ${err}`
+            );
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
+        }
+      );
     }
   );
 }
@@ -395,7 +541,7 @@ export function registerClassifyFileTool(
   }
   const description = fixedConfigurationId
     ? `Classify a file using the saved classify configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories are pulled from the saved configuration.`
-    : 'Classify a file (based on specific categories) providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided';
+    : 'Classify a file (based on specific categories) providing its file ID. Use with file IDs obtained with the getUploadUrl/uploadFileByUrl tool or that the user provided';
   server.tool('classifyFile', description, schema, async (args, extra) => {
     return tracer.startActiveSpan('tool.classifyFile', async (span) => {
       span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
@@ -480,7 +626,7 @@ export function registerSplitFileTool(
   }
   const description = fixedConfigurationId
     ? `Split a file into category-based segments using the saved split configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories and splitting strategy are pulled from the saved configuration.`
-    : 'Split a file into category-based segments providing its file ID. Use with file IDs obtained with the uploadFileChunk tool or that the user provided';
+    : 'Split a file into category-based segments providing its file ID. Use with file IDs obtained with the getUploadUrl/uploadFileByUrl tool or that the user provided';
   server.tool('splitFile', description, schema, async (args, extra) => {
     return tracer.startActiveSpan('tool.splitFile', async (span) => {
       span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
@@ -1088,4 +1234,6 @@ export function registerLlamaParseTools(server: McpServer) {
   registerReadFileFromIndexTool(server);
   registerGrepFileFromIndexTool(server);
   registerRetrieveFromIndexTool(server);
+  registerLitParseTool(server);
+  registerLitIsComplexTool(server);
 }
