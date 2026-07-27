@@ -3,7 +3,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-
 const LITEPARSE_TRACE_INCLUDES = [
   // Real (non-symlinked) paths inside pnpm's virtual store. See NOTE 3.
   './node_modules/.pnpm/@llamaindex+liteparse@*/node_modules/@llamaindex/liteparse/**',
