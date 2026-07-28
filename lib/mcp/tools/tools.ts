@@ -370,7 +370,7 @@ export function registerParseFileTool(server: McpServer) {
 export function registerLitParseTool(server: McpServer) {
   server.tool(
     'parseWithLiteParse',
-    'Parse a file with LiteParse, a fast, in-process parser that does not consume credits from the LlamaParse Platform. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user',
+    'Parse a PDF file with LiteParse, a fast, in-process parser that does not consume credits from the LlamaParse Platform. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user. Only works with PDF files.',
     {
       fileId: z.string().describe('ID of the file to parse.'),
       pages: z
@@ -445,7 +445,7 @@ export function registerLitParseTool(server: McpServer) {
 export function registerLitIsComplexTool(server: McpServer) {
   server.tool(
     'estimateFileComplexity',
-    'Estimate the parsing complexity of a file (providing its file ID) using LiteParse. Returns a JSON object mapping each page with the LlamaParse tier it should be parsed with (or if you should use LiteParse), based on the parsing complexity and the need for OCR. Use in combination with parseFile and parseWithLiteParse. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user',
+    'Estimate the parsing complexity of a PDF file (providing its file ID) using LiteParse. Returns a JSON object mapping each page with the LlamaParse tier it should be parsed with (or if you should use LiteParse), based on the parsing complexity and the need for OCR. Use in combination with parseFile and parseWithLiteParse. The tool needs a file ID obtained with the getUploadUrl/uploadFileByUrl tool or provided by the user. Only works with PDF files.',
     {
       fileId: z
         .string()
