@@ -8,12 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@llamaindex/liteparse':
-        specifier: ^2.9.0
-        version: 2.9.0
-      '@llamaindex/liteparse-linux-x64-gnu':
-        specifier: ^2.9.0
-        version: 2.9.0
+      '@llamaindex/liteparse-wasm':
+        specifier: ^2.10.0
+        version: 2.10.0
       '@llamaindex/llama-cloud':
         specifier: 2.8.0
         version: 2.8.0
@@ -601,45 +598,9 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@llamaindex/liteparse-darwin-arm64@2.9.0':
-    resolution: {integrity: sha512-fc69FRow4HdSgyugUnl9kEBc1vP/2KaaJd2yZnQBncPjC75PPp+QdEKKpsrobWvtI23grGbNlFoa/pCQ0YqTUw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@llamaindex/liteparse-darwin-x64@2.9.0':
-    resolution: {integrity: sha512-LK5wNrPr/LBkJqThKSaxvzWQcOvFOiDodIIp6Kb+eABrD48ht4c6/s20ByAGPmXOmWNDusj40octDRzCloNk7w==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@llamaindex/liteparse-linux-arm64-gnu@2.9.0':
-    resolution: {integrity: sha512-XhVSFUHST6tS6Nd0PMrv5P4g1jUPutfkFtl072vzMbobfYahKkhg8I4HyubQlz7LH4t7tF62APvqtnLMjXvsvg==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@llamaindex/liteparse-linux-x64-gnu@2.9.0':
-    resolution: {integrity: sha512-x6dHwg67ZDYyuVmsXTuxa1NPQ8B8utjaDF5rz1g3FvOHOBJxWRoPAHG963e1BOPT+ffzZ2UBs6l7dUyJUTswUw==}
-    cpu: [x64]
-    os: [linux]
-
-  '@llamaindex/liteparse-linux-x64-musl@2.9.0':
-    resolution: {integrity: sha512-eeIsCh9aEb1Dn0SQsflijRrke3hzCqXmxCsZOz+KmIsifBq8xd4Iq7AfPtAlV4NNbJ8nrOQISc1HsR/OPc+XqA==}
-    cpu: [x64]
-    os: [linux]
-
-  '@llamaindex/liteparse-win32-arm64-msvc@2.9.0':
-    resolution: {integrity: sha512-gNIX1/eMMDtU17H+r2n6KY74QFuWV1e//21jH8qey6u5ZI+RM3bSE2ydDbeQH3PefcmJBJRygNpg6V5GWdAvFQ==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@llamaindex/liteparse-win32-x64-msvc@2.9.0':
-    resolution: {integrity: sha512-YWOKeiDAFYZb0jxWiUtWKT72+SLUnSrjkYW1hqGMDjk+eVwXfufdcEHQ3KaJWx2t4hB1p+M84EWHM1XgBwjSJg==}
-    cpu: [x64]
-    os: [win32]
-
-  '@llamaindex/liteparse@2.9.0':
-    resolution: {integrity: sha512-gn/0NahLGe78zvMQvxJvzakIG6SwbPSG6Y2HFf9Li4vIMWzUrwaaZYWZDZ7U/EJy/+VFCAtriPhinwd6NsqlgA==}
+  '@llamaindex/liteparse-wasm@2.10.0':
+    resolution: {integrity: sha512-0/gj65OrwuBb2c4CuFFdT9Xg1b4zzjcEn2i/l/O1BobXf8Oeo+eWetMe1G44aYmLDMjihBBlXy0vbSXTYJ+efw==}
     engines: {node: '>=18.0.0'}
-    hasBin: true
 
   '@llamaindex/llama-cloud@2.8.0':
     resolution: {integrity: sha512-L/Bao8ebVZpVwkpig54IlKEaFXYn4YoKhIWXtDqwul4Vxa8y+o9qvJL9qdWhpajrxPsHigTSPHn9C8OR80W+HA==}
@@ -1444,10 +1405,6 @@ packages:
   commander@11.1.0:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
     engines: {node: '>=16'}
-
-  commander@12.1.0:
-    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
-    engines: {node: '>=18'}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
@@ -4076,37 +4033,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@llamaindex/liteparse-darwin-arm64@2.9.0':
-    optional: true
-
-  '@llamaindex/liteparse-darwin-x64@2.9.0':
-    optional: true
-
-  '@llamaindex/liteparse-linux-arm64-gnu@2.9.0':
-    optional: true
-
-  '@llamaindex/liteparse-linux-x64-gnu@2.9.0': {}
-
-  '@llamaindex/liteparse-linux-x64-musl@2.9.0':
-    optional: true
-
-  '@llamaindex/liteparse-win32-arm64-msvc@2.9.0':
-    optional: true
-
-  '@llamaindex/liteparse-win32-x64-msvc@2.9.0':
-    optional: true
-
-  '@llamaindex/liteparse@2.9.0':
-    dependencies:
-      commander: 12.1.0
-    optionalDependencies:
-      '@llamaindex/liteparse-darwin-arm64': 2.9.0
-      '@llamaindex/liteparse-darwin-x64': 2.9.0
-      '@llamaindex/liteparse-linux-arm64-gnu': 2.9.0
-      '@llamaindex/liteparse-linux-x64-gnu': 2.9.0
-      '@llamaindex/liteparse-linux-x64-musl': 2.9.0
-      '@llamaindex/liteparse-win32-arm64-msvc': 2.9.0
-      '@llamaindex/liteparse-win32-x64-msvc': 2.9.0
+  '@llamaindex/liteparse-wasm@2.10.0': {}
 
   '@llamaindex/llama-cloud@2.8.0': {}
 
@@ -4954,8 +4881,6 @@ snapshots:
       delayed-stream: 1.0.0
 
   commander@11.1.0: {}
-
-  commander@12.1.0: {}
 
   commander@4.1.1: {}
 

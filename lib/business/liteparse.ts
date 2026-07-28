@@ -1,13 +1,36 @@
-import type { LiteParse as LiteParseType } from '@llamaindex/liteparse';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { LiteParse as LiteParseType } from '@llamaindex/liteparse-wasm';
 import LlamaCloud from '@llamaindex/llama-cloud';
 
-// Lazy loader so a native-module load failure doesn't crash the whole SSR bundle
+// Lazy loader: initializes the wasm module once and caches the constructor.
+//
+// The wasm bytes are loaded by a CJS shim (`shim-wasm.cjs` at the repo root)
+// that uses Node's real resolver. Doing the resolve inside the bundled TS file
+// doesn't work: webpack rewrites `require.resolve` calls to its runtime
+// resolver, and in the RSC/server layer that returns paths prefixed with
+// `(rsc)/` (and, on serverless, resolves against the wrong root entirely).
+//
+// We load the shim via a dynamic `import()` whose specifier is built at
+// runtime + a `webpackIgnore` hint, so webpack leaves it alone and Node loads
+// it from the real filesystem.
 let _LiteParseCtor: typeof LiteParseType | null = null;
 async function getLiteParse() {
-  if (!_LiteParseCtor) {
-    const mod = await import('@llamaindex/liteparse');
-    _LiteParseCtor = mod.LiteParse;
-  }
+  if (_LiteParseCtor) return _LiteParseCtor;
+
+  const mod = await import('@llamaindex/liteparse-wasm');
+
+  const shimPath = path.join(process.cwd(), 'shim-wasm.cjs');
+  const shimUrl = pathToFileURL(shimPath).href;
+  // Dynamic import with `webpackIgnore` -> webpack leaves it alone and Node
+  // loads the CJS shim from the real filesystem at runtime.
+  const shim: { loadLiteparseWasmBytes: () => Buffer } = await import(
+    /* webpackIgnore: true */ shimUrl
+  );
+
+  const wasmBytes = shim.loadLiteparseWasmBytes();
+  await mod.default({ module_or_path: wasmBytes });
+  _LiteParseCtor = mod.LiteParse;
   return _LiteParseCtor;
 }
 
@@ -224,7 +247,6 @@ export async function isComplex({
   const lit = new Liteparse({
     ocrEnabled: false,
     quiet: true,
-    numWorkers: 1,
   });
   const buf = await getFile(client, fileId);
   const pages = await lit.isComplex(buf);
@@ -307,7 +329,6 @@ export async function litParse({
   const lit = new Liteparse({
     ocrEnabled: false,
     quiet: true,
-    numWorkers: 1,
     outputFormat: markdown ? 'markdown' : 'text',
     targetPages: pages ? pages.map((p) => p.toString()).join(',') : undefined,
   });
