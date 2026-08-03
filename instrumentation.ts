@@ -1,6 +1,8 @@
 import { registerOTel, OTLPHttpJsonTraceExporter } from '@vercel/otel';
+import { assertRegionConfig } from './lib/region';
 
 export function register() {
+  assertRegionConfig();
   registerOTel({
     serviceName: 'llamaindex-mcp-traces',
     traceExporter: new OTLPHttpJsonTraceExporter({

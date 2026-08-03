@@ -1,4 +1,9 @@
-import { getRegion, llamaCloudBaseUrl, regionProfile } from '../lib/region';
+import {
+  assertRegionConfig,
+  getRegion,
+  llamaCloudBaseUrl,
+  regionProfile,
+} from '../lib/region';
 
 const NA_API = 'https://api.cloud.llamaindex.ai';
 const EU_API = 'https://api.cloud.eu.llamaindex.ai';
@@ -116,6 +121,36 @@ describe('region', () => {
     it('throws on a malformed override', () => {
       process.env.LLAMA_CLOUD_BASE_URL = 'not-a-url';
       expect(() => llamaCloudBaseUrl()).toThrow(
+        /LLAMA_CLOUD_BASE_URL is not a valid URL/
+      );
+    });
+  });
+
+  describe('assertRegionConfig', () => {
+    it('accepts the default configuration', () => {
+      expect(() => assertRegionConfig()).not.toThrow();
+    });
+
+    it('accepts a consistent eu configuration', () => {
+      process.env.LLAMA_CLOUD_REGION = 'eu';
+      process.env.LLAMA_CLOUD_BASE_URL = EU_API;
+      expect(() => assertRegionConfig()).not.toThrow();
+    });
+
+    it('rejects an unknown region', () => {
+      process.env.LLAMA_CLOUD_REGION = 'apac';
+      expect(() => assertRegionConfig()).toThrow(/Invalid LLAMA_CLOUD_REGION/);
+    });
+
+    it('rejects a cross-region base url override', () => {
+      process.env.LLAMA_CLOUD_REGION = 'eu';
+      process.env.LLAMA_CLOUD_BASE_URL = NA_API;
+      expect(() => assertRegionConfig()).toThrow(/North America \(NA\)/);
+    });
+
+    it('rejects a malformed base url override', () => {
+      process.env.LLAMA_CLOUD_BASE_URL = 'not-a-url';
+      expect(() => assertRegionConfig()).toThrow(
         /LLAMA_CLOUD_BASE_URL is not a valid URL/
       );
     });

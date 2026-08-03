@@ -18,13 +18,14 @@ const PROFILES: Record<Region, RegionProfile> = {
 
 const REGIONS = Object.keys(PROFILES) as Region[];
 
-function hostOf(url: string, varName: string): string {
-  try {
-    return new URL(url).host.toLowerCase();
-  } catch {
-    throw new Error(`${varName} is not a valid URL: "${url}"`);
-  }
+function hostOf(url: string): string {
+  return new URL(url).host.toLowerCase();
 }
+
+const API_HOSTS = REGIONS.map((region) => ({
+  region,
+  host: hostOf(PROFILES[region].apiBaseUrl),
+}));
 
 /**
  * The region this deployment serves. Defaults to `na` so an unset variable keeps
@@ -59,20 +60,33 @@ export function llamaCloudBaseUrl(): string {
     return regionProfile().apiBaseUrl;
   }
 
+  let overrideHost: string;
+  try {
+    overrideHost = hostOf(override);
+  } catch {
+    throw new Error(`LLAMA_CLOUD_BASE_URL is not a valid URL: "${override}"`);
+  }
+
   const region = getRegion();
-  const overrideHost = hostOf(override, 'LLAMA_CLOUD_BASE_URL');
-  for (const other of REGIONS) {
-    if (
-      other !== region &&
-      overrideHost ===
-        hostOf(PROFILES[other].apiBaseUrl, 'LLAMA_CLOUD_BASE_URL')
-    ) {
-      throw new Error(
-        `LLAMA_CLOUD_BASE_URL points at the ${PROFILES[other].label} API ("${override}") ` +
-          `but LLAMA_CLOUD_REGION is "${region}" (${PROFILES[region].label}).`
-      );
-    }
+  const foreign = API_HOSTS.find(
+    (entry) => entry.region !== region && entry.host === overrideHost
+  );
+  if (foreign) {
+    throw new Error(
+      `LLAMA_CLOUD_BASE_URL points at the ${PROFILES[foreign.region].label} API ("${override}") ` +
+        `but LLAMA_CLOUD_REGION is "${region}" (${PROFILES[region].label}).`
+    );
   }
 
   return override.replace(/\/+$/, '');
+}
+
+/**
+ * Fail a misconfigured deployment at boot rather than on every tool call.
+ * Called from `instrumentation.ts`, which Next runs once per runtime at startup:
+ * without it a bad region deploys green and only surfaces as a per-request error
+ * that reaches the MCP client, long after the deployment has gone live.
+ */
+export function assertRegionConfig(): void {
+  llamaCloudBaseUrl();
 }
