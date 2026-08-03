@@ -27,6 +27,20 @@ const nextConfig = {
     '/split/mcp': LITEPARSE_TRACE_INCLUDES,
     '/split/[configId]/mcp': LITEPARSE_TRACE_INCLUDES,
   },
+  async redirects() {
+    return [
+      {
+        // There is no root page: this app only serves /mcp endpoints, OAuth
+        // discovery under /.well-known, and the /upload flow. Send humans who
+        // land on the bare host to the setup guide instead of a 404.
+        // Temporary (307) so the destination can move without being cached.
+        source: '/',
+        destination:
+          'https://developers.llamaindex.ai/llamaparse/integrations/mcp/',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
