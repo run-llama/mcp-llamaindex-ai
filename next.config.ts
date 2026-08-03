@@ -36,7 +36,7 @@ const nextConfig = {
         // Temporary (307) so the destination can move without being cached.
         source: '/',
         destination:
-          'https://developers.llamaindex.ai/llamaparse/integrations/mcp/',
+          'https://developers.llamaindex.ai/llamaparse/for-agents/mcp/',
         permanent: false,
       },
     ];
