@@ -1,6 +1,7 @@
 import { getKVStore } from '@/lib/business/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import LlamaCloud from '@llamaindex/llama-cloud';
+import { llamaCloudBaseUrl } from '@/lib/region';
 
 // @ts-expect-error params is implictly any
 export async function POST(req: NextRequest, { params }) {
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest, { params }) {
   const projectId = req.nextUrl.searchParams.get('project_id') ?? undefined;
   const client = new LlamaCloud({
     apiKey: authToken,
-    baseURL: process.env.LLAMA_CLOUD_BASE_URL,
+    baseURL: llamaCloudBaseUrl(),
   });
   try {
     const fileObj = await client.files.create({
