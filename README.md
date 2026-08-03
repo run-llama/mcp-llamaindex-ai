@@ -2,6 +2,8 @@
 
 An authenticated [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that exposes [LlamaParse](https://developers.llamaindex.ai/llamaparse/) document processing capabilities to any MCP-compatible AI client. Built with Next.js 15 and deployed on Vercel, it uses [WorkOS AuthKit](https://workos.com/docs/user-management) for OAuth authentication so users sign in with their LlamaCloud credentials (**no API key sharing required**).
 
+Visit [our docs](https://developers.llamaindex.ai/for-agents/) to learn more, or read on for exact implementation details.
+
 ## MCP Tools
 
 | Tool | Description |
