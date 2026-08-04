@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { publicBaseUrl } from '@/lib/urls';
 
 export default function UploadForm({
   token,
@@ -38,9 +37,12 @@ export default function UploadForm({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const prod_url = publicBaseUrl();
-      const base = `${prod_url}/api/upload/${token}`;
-      const url = new URL(base);
+      // Relative: this page is served by the same app that serves the upload
+      // route. An absolute production origin makes the POST cross-origin on
+      // preview deployments and aliases -- it still succeeds and consumes the
+      // one-time token, but the response is unreadable, so a successful upload
+      // reports as a failure.
+      const url = new URL(`/api/upload/${token}`, window.location.origin);
       url.searchParams.set('purpose', purpose);
       if (projectId) {
         url.searchParams.set('project_id', projectId);
