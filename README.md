@@ -161,6 +161,16 @@ REDIS_URI=redis://localhost:6379
 
 > **WorkOS setup tip:** In your WorkOS dashboard, add `http://localhost:3000/callback` as an allowed redirect URI for local development.
 
+> **Deploying `LLAMA_CLOUD_REGION=eu`:** the function region must also be in the
+> EU. Documents are uploaded through this server, downloaded back for LiteParse,
+> and parsed in the function, so pointing at the EU API is not on its own enough
+> to keep them in region. Set the Vercel project's function region to `fra1`,
+> `cdg1`, `arn1` or `dub1` — Vercel's default for a new project is `iad1`. An EU
+> deployment left on the default still *deploys*; it then returns 500 for every
+> request until the function region is corrected. Set it in **project
+> settings**, not in a `vercel.json`: that file is shared with the NA project and
+> would relocate its traffic too.
+
 ### 3. Run the dev server
 
 ```bash

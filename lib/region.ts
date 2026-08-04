@@ -1,92 +1,219 @@
+import 'server-only';
+import { isLoopbackHostname, normalizeBaseUrl } from './urls';
+
 export type Region = 'na' | 'eu';
 
+/**
+ * A deployment misconfiguration, as distinct from a runtime failure. Callers
+ * use this to avoid telling a user to retry something that can never succeed,
+ * and to avoid echoing a message that names internal hosts.
+ */
+export class RegionConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegionConfigError';
+  }
+}
+
 type RegionProfile = {
-  label: string;
-  apiBaseUrl: string;
+  readonly label: string;
+  readonly apiBaseUrl: string;
+  /**
+   * Vercel regions whose compute satisfies this region's residency commitment.
+   * Documents are terminated and parsed inside the function, so the API host
+   * alone does not keep them in region.
+   *
+   * Only `eu` is constrained: it is the region with a published commitment
+   * ("all data provided will remain within the EU region for storage and
+   * processing"). Deliberately excludes lhr1 and zrh1 — the UK and Switzerland
+   * hold adequacy decisions but are not in the EU. `na` is left unconstrained
+   * because there is no equivalent commitment and the existing deployment does
+   * not pin a function region.
+   */
+  readonly computeRegions?: readonly string[];
 };
 
-const PROFILES: Record<Region, RegionProfile> = {
-  na: {
+const PROFILES: Record<Region, RegionProfile> = Object.freeze({
+  na: Object.freeze({
     label: 'North America (NA)',
     apiBaseUrl: 'https://api.cloud.llamaindex.ai',
-  },
-  eu: {
+  }),
+  eu: Object.freeze({
     label: 'Europe (EU)',
     apiBaseUrl: 'https://api.cloud.eu.llamaindex.ai',
-  },
-};
+    computeRegions: Object.freeze(['fra1', 'cdg1', 'arn1', 'dub1']),
+  }),
+});
 
 const REGIONS = Object.keys(PROFILES) as Region[];
 
-function hostOf(url: string): string {
-  return new URL(url).host.toLowerCase();
+/** Vercel reports this during a build; it is not the region traffic is served from. */
+const BUILD_TIME_VERCEL_REGION = 'dev1';
+
+function hostnameOf(url: URL): string {
+  return url.hostname.toLowerCase().replace(/\.$/, '');
 }
 
-const API_HOSTS = REGIONS.map((region) => ({
+const API_HOSTNAMES = REGIONS.map((region) => ({
   region,
-  host: hostOf(PROFILES[region].apiBaseUrl),
+  hostname: hostnameOf(new URL(PROFILES[region].apiBaseUrl)),
 }));
 
-/**
- * The region this deployment serves. Defaults to `na` so an unset variable keeps
- * the historical single-region behaviour.
- */
-export function getRegion(): Region {
-  const raw = process.env.LLAMA_CLOUD_REGION?.trim().toLowerCase();
+function declaredRegion(): Region | undefined {
+  const declared = process.env.LLAMA_CLOUD_REGION;
+  if (declared === undefined) {
+    return undefined;
+  }
+  // A present-but-blank value means someone intended to set this; treating it
+  // as unset would silently resolve to NA.
+  const raw = declared.trim().toLowerCase();
   if (!raw) {
-    return 'na';
+    throw new RegionConfigError(
+      `LLAMA_CLOUD_REGION is set but empty — remove it, or set one of: ${REGIONS.join(', ')}`
+    );
   }
   if (!REGIONS.includes(raw as Region)) {
-    throw new Error(
-      `Invalid LLAMA_CLOUD_REGION "${process.env.LLAMA_CLOUD_REGION}" — expected one of: ${REGIONS.join(', ')}`
+    // Quote the normalised value, not the raw one: this message reaches remote
+    // MCP clients, and it should name exactly what was tested.
+    throw new RegionConfigError(
+      `Invalid LLAMA_CLOUD_REGION "${raw}" — expected one of: ${REGIONS.join(', ')}`
     );
   }
   return raw as Region;
+}
+
+/**
+ * Resolve the region and API base URL together, so the two can never disagree.
+ *
+ * `LLAMA_CLOUD_BASE_URL` is an override for local development. When it names a
+ * known region's API it *determines* the region, which keeps the pre-existing
+ * single-variable configuration working and unambiguous. Any other host must be
+ * loopback and must state its region explicitly — an unrecognised host is
+ * refused rather than assumed to be in region, because documents transit this
+ * server and a wrong guess moves them out of the region they were promised to
+ * stay in.
+ *
+ * Error messages name only the hostname: the raw value can carry credentials
+ * and these throws reach remote MCP clients.
+ */
+function resolveRegionConfig(): { region: Region; baseUrl: string } {
+  const declared = declaredRegion();
+  const override = process.env.LLAMA_CLOUD_BASE_URL;
+  // Same reasoning as the blank region above: silently ignoring a set-but-empty
+  // override would point a local deployment at the production API.
+  if (override !== undefined && !override.trim()) {
+    throw new RegionConfigError(
+      'LLAMA_CLOUD_BASE_URL is set but empty — remove it, or give it a value'
+    );
+  }
+  const rawOverride = override?.trim();
+
+  if (!rawOverride) {
+    const region = declared ?? 'na';
+    return { region, baseUrl: PROFILES[region].apiBaseUrl };
+  }
+
+  let baseUrl: string;
+  try {
+    // originOnly: the SDK builds request URLs by concatenating onto this, so a
+    // path would double-prefix every call.
+    baseUrl = normalizeBaseUrl(rawOverride, 'LLAMA_CLOUD_BASE_URL', {
+      originOnly: true,
+    });
+  } catch (e) {
+    throw new RegionConfigError((e as Error).message);
+  }
+  const url = new URL(baseUrl);
+  const hostname = hostnameOf(url);
+
+  const match = API_HOSTNAMES.find((entry) => entry.hostname === hostname);
+  if (match) {
+    if (declared && declared !== match.region) {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_REGION is "${declared}" (${PROFILES[declared].label}) but LLAMA_CLOUD_BASE_URL points at the ${PROFILES[match.region].label} API ("${hostname}").`
+      );
+    }
+    if (url.protocol !== 'https:') {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_BASE_URL must use https for "${hostname}" — "${url.protocol}" would send the API key and document contents in cleartext.`
+      );
+    }
+    return { region: match.region, baseUrl };
+  }
+
+  if (isLoopbackHostname(hostname)) {
+    if (!declared) {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_BASE_URL points at "${hostname}", which is not a known region API, so LLAMA_CLOUD_REGION must state the region this deployment serves.`
+      );
+    }
+    // A bare `127.0.0.1:8000` is normalised to https, and a local API is almost
+    // never TLS — that combination boots green and then fails every request on
+    // a handshake error. Make the operator state the scheme.
+    if (!/^https?:\/\//i.test(rawOverride)) {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_BASE_URL must include an explicit http:// or https:// scheme for the local host "${hostname}".`
+      );
+    }
+    return { region: declared, baseUrl };
+  }
+
+  throw new RegionConfigError(
+    `LLAMA_CLOUD_BASE_URL host "${hostname}" is not a recognised LlamaCloud API. Allowed: ${API_HOSTNAMES.map((e) => e.hostname).join(', ')}, or a loopback host for local development.`
+  );
+}
+
+export function getRegion(): Region {
+  return resolveRegionConfig().region;
 }
 
 export function regionProfile(): RegionProfile {
   return PROFILES[getRegion()];
 }
 
-/**
- * LlamaCloud API base for this deployment. `LLAMA_CLOUD_BASE_URL` remains an
- * override for local development and staging, but may never point at another
- * region's API: documents transit this server, so a cross-region base URL would
- * move them out of the region they were promised to stay in.
- */
 export function llamaCloudBaseUrl(): string {
-  const override = process.env.LLAMA_CLOUD_BASE_URL?.trim();
-  if (!override) {
-    return regionProfile().apiBaseUrl;
-  }
-
-  let overrideHost: string;
-  try {
-    overrideHost = hostOf(override);
-  } catch {
-    throw new Error(`LLAMA_CLOUD_BASE_URL is not a valid URL: "${override}"`);
-  }
-
-  const region = getRegion();
-  const foreign = API_HOSTS.find(
-    (entry) => entry.region !== region && entry.host === overrideHost
-  );
-  if (foreign) {
-    throw new Error(
-      `LLAMA_CLOUD_BASE_URL points at the ${PROFILES[foreign.region].label} API ("${override}") ` +
-        `but LLAMA_CLOUD_REGION is "${region}" (${PROFILES[region].label}).`
-    );
-  }
-
-  return override.replace(/\/+$/, '');
+  return resolveRegionConfig().baseUrl;
 }
 
 /**
  * Fail a misconfigured deployment at boot rather than on every tool call.
- * Called from `instrumentation.ts`, which Next runs once per runtime at startup:
- * without it a bad region deploys green and only surfaces as a per-request error
- * that reaches the MCP client, long after the deployment has gone live.
+ * Called from `instrumentation.ts`, which Next runs once per runtime at startup.
  */
 export function assertRegionConfig(): void {
-  llamaCloudBaseUrl();
+  const { region } = resolveRegionConfig();
+  assertComputeRegion(region);
+}
+
+/**
+ * The API host says where requests go; it says nothing about where this server
+ * runs. Documents are proxied, downloaded and (for LiteParse) parsed inside the
+ * function, so a region with a residency commitment must also pin its compute.
+ *
+ * Node runtime only. Vercel deploys middleware to every PoP regardless of the
+ * project's region setting, so in the edge runtime `VERCEL_REGION` is whichever
+ * PoP served the request — asserting there would take an EU deployment offline
+ * everywhere outside the four EU cities. The functions that touch documents all
+ * run on Node.
+ *
+ * Skipped when `VERCEL_REGION` is absent (local development, CI, self-hosted)
+ * or reports the build-time placeholder, since neither is the region that
+ * serves traffic.
+ */
+function assertComputeRegion(region: Region): void {
+  if (process.env.NEXT_RUNTIME !== 'nodejs') {
+    return;
+  }
+  const allowed = PROFILES[region].computeRegions;
+  if (!allowed) {
+    return;
+  }
+  const vercelRegion = process.env.VERCEL_REGION?.trim().toLowerCase();
+  if (!vercelRegion || vercelRegion === BUILD_TIME_VERCEL_REGION) {
+    return;
+  }
+  if (!allowed.includes(vercelRegion)) {
+    throw new RegionConfigError(
+      `This deployment serves ${PROFILES[region].label} but its functions run in Vercel region "${vercelRegion}". Documents are processed inside the function, so the compute region must be one of: ${allowed.join(', ')}.`
+    );
+  }
 }

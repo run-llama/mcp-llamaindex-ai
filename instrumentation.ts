@@ -2,7 +2,8 @@ import { registerOTel, OTLPHttpJsonTraceExporter } from '@vercel/otel';
 import { assertRegionConfig } from './lib/region';
 
 export function register() {
-  assertRegionConfig();
+  // OTel first: a region misconfiguration is exactly the failure that makes the
+  // service dark, and Next never retries this hook once it throws.
   registerOTel({
     serviceName: 'llamaindex-mcp-traces',
     traceExporter: new OTLPHttpJsonTraceExporter({
@@ -13,4 +14,5 @@ export function register() {
       },
     }),
   });
+  assertRegionConfig();
 }
