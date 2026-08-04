@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { publicBaseUrl } from '@/lib/urls';
 
 export default function UploadForm({
   token,
@@ -37,12 +38,7 @@ export default function UploadForm({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const prod_url =
-        process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!.startsWith(
-          'http'
-        )
-          ? process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!
-          : 'https://' + process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!;
+      const prod_url = publicBaseUrl();
       const base = `${prod_url}/api/upload/${token}`;
       const url = new URL(base);
       url.searchParams.set('purpose', purpose);

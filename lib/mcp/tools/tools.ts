@@ -1,4 +1,5 @@
 import { ensureUserAuthenticated } from '@/lib/auth/helpers';
+import { publicBaseUrl } from '@/lib/urls';
 import {
   classifyFile,
   extract,
@@ -110,13 +111,7 @@ export function registerGetUploadUrlTool(server: McpServer) {
         }
         span.setAttribute('uploadUrl.success', true);
         span.end();
-        const prod_url =
-          process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!.startsWith(
-            'http'
-          )
-            ? process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!
-            : 'https://' +
-              process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL!;
+        const prod_url = publicBaseUrl();
         const base = `${prod_url}/api/upload/${token}`;
         const url = new URL(base);
         url.searchParams.set('purpose', args.purpose ?? 'parse');
