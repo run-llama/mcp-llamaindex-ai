@@ -1,7 +1,7 @@
 import { getKVStore } from '@/lib/business/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import LlamaCloud from '@llamaindex/llama-cloud';
-import { llamaCloudBaseUrl } from '@/lib/region';
+import { llamaCloudBaseUrl, RegionConfigError } from '@/lib/region';
 import { getLogger } from '@/lib/observability/logger';
 
 // @ts-expect-error params is implictly any
@@ -64,6 +64,16 @@ export async function POST(req: NextRequest, { params }) {
     }
     return NextResponse.json({ file_id: fileObj.id }, { status: 200 });
   } catch (e) {
+    // Defensive: a configuration error normally aborts boot in
+    // instrumentation.ts, so this rarely fires. When it does it is permanent,
+    // so it gets neither the retry advice nor a generic-failure framing.
+    if (e instanceof RegionConfigError) {
+      getLogger().error(`Upload blocked by a server configuration error: ${e}`);
+      return NextResponse.json(
+        { detail: 'The server is misconfigured. Contact the administrator.' },
+        { status: 500 }
+      );
+    }
     // Never interpolate the error: this endpoint is reachable before the token
     // is validated, and the browser form renders the response body verbatim, so
     // a Redis or config failure would put internal detail in front of any
