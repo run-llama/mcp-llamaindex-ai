@@ -2,6 +2,7 @@ import { getKVStore } from '@/lib/business/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import LlamaCloud from '@llamaindex/llama-cloud';
 import { llamaCloudBaseUrl } from '@/lib/region';
+import { getLogger } from '@/lib/observability/logger';
 
 // @ts-expect-error params is implictly any
 export async function POST(req: NextRequest, { params }) {
@@ -52,16 +53,27 @@ export async function POST(req: NextRequest, { params }) {
       purpose,
       project_id: projectId,
     });
-    // Record the file id before consuming the token. The other order loses the
-    // id if this write fails, and then tells the caller to retry with a token
-    // that no longer exists — for a file already uploaded and billed.
-    await kvStore.setFileId(token, fileObj.id);
-    await kvStore.delete(token);
+    // The file is uploaded and billed by this point, so bookkeeping must not
+    // fail the request: a 500 here would have the caller retry and pay twice,
+    // and the id it already earned would be lost.
+    try {
+      await kvStore.setFileId(token, fileObj.id);
+      await kvStore.delete(token);
+    } catch (e) {
+      getLogger().error(`Upload succeeded but token bookkeeping failed: ${e}`);
+    }
     return NextResponse.json({ file_id: fileObj.id }, { status: 200 });
   } catch (e) {
+    // Never interpolate the error: this endpoint is reachable before the token
+    // is validated, and the browser form renders the response body verbatim, so
+    // a Redis or config failure would put internal detail in front of any
+    // caller. The token is still valid here — it is consumed only after a
+    // successful upload — so the retry advice is accurate.
+    getLogger().error(`Upload failed: ${e}`);
     return NextResponse.json(
       {
-        detail: `File upload failed because of ${e}. If less than 10 minutes have passed since the generation of the token, you will be able to retry with the same URL, otherwise you'll have to obtain a new one`,
+        detail:
+          "File upload failed. If less than 10 minutes have passed since the generation of the token, you will be able to retry with the same URL, otherwise you'll have to obtain a new one",
       },
       { status: 500 }
     );

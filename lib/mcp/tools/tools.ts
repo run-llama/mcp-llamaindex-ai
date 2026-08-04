@@ -88,6 +88,10 @@ export function registerGetUploadUrlTool(server: McpServer) {
         ensureUserAuthenticated(authInfo);
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
+        // Resolved before the token is written and the span is closed: this
+        // can now reject several malformed shapes, and throwing after the write
+        // burns a token and records a successful span for a failed call.
+        const prodUrl = publicBaseUrl();
         const token = randomBytes(48).toString('base64url');
         const kvStore = getKVStore();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -111,8 +115,7 @@ export function registerGetUploadUrlTool(server: McpServer) {
         }
         span.setAttribute('uploadUrl.success', true);
         span.end();
-        const prod_url = publicBaseUrl();
-        const base = `${prod_url}/api/upload/${token}`;
+        const base = `${prodUrl}/api/upload/${token}`;
         const url = new URL(base);
         url.searchParams.set('purpose', args.purpose ?? 'parse');
         url.searchParams.set('expires_at', expiresAt);
@@ -120,7 +123,7 @@ export function registerGetUploadUrlTool(server: McpServer) {
           url.searchParams.set('project_id', args.projectId);
         }
         const presignedUrl = url.toString();
-        const urlUpload = new URL(`${prod_url}/upload/${token}`);
+        const urlUpload = new URL(`${prodUrl}/upload/${token}`);
         urlUpload.searchParams.set('expires_at', expiresAt);
         if (args.projectId) {
           url.searchParams.set('project_id', args.projectId);

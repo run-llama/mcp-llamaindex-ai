@@ -1,4 +1,8 @@
-import { normalizeBaseUrl, publicBaseUrl } from '../lib/urls';
+import {
+  isLoopbackHostname,
+  normalizeBaseUrl,
+  publicBaseUrl,
+} from '../lib/urls';
 import { authkitOrigin } from '../lib/authkit';
 
 describe('normalizeBaseUrl', () => {
@@ -55,6 +59,28 @@ describe('normalizeBaseUrl', () => {
     );
   });
 
+  it('accepts a bare host and port that is not loopback', () => {
+    expect(normalizeBaseUrl('example.com:8080', V)).toBe(
+      'https://example.com:8080'
+    );
+  });
+
+  // The URL parser repairs the missing slash; requiring `://` to detect a
+  // scheme would instead prefix this into the host `https`.
+  it('repairs a single-slash scheme', () => {
+    expect(normalizeBaseUrl('https:/mcp.llamaindex.ai', V)).toBe(
+      'https://mcp.llamaindex.ai'
+    );
+  });
+
+  // A trailing dot is forbidden in the TLS SNI extension, and `url.origin`
+  // keeps it, so it must be stripped from what consumers receive.
+  it('strips a trailing dot from the host', () => {
+    expect(normalizeBaseUrl('https://api.cloud.eu.llamaindex.ai./', V)).toBe(
+      'https://api.cloud.eu.llamaindex.ai'
+    );
+  });
+
   describe('caller constraints', () => {
     it('originOnly rejects a path', () => {
       expect(() =>
@@ -72,6 +98,12 @@ describe('normalizeBaseUrl', () => {
       expect(() =>
         normalizeBaseUrl('http://login.example.com', V, { requireHttps: true })
       ).toThrow(/must use https/);
+    });
+
+    it('requireHttps still allows cleartext to loopback', () => {
+      expect(
+        normalizeBaseUrl('http://localhost:3000', V, { requireHttps: true })
+      ).toBe('http://localhost:3000');
     });
 
     it('requireHttps allows https', () => {
@@ -227,6 +259,22 @@ describe('environment readers', () => {
       expect(publicBaseUrl()).toBe('http://localhost:3000');
     });
 
+    // Both consumers append an absolute app path, and no basePath is
+    // configured, so a path here produces URLs that cannot resolve.
+    it('rejects a path', () => {
+      process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL =
+        'mcp.llamaindex.ai/mcp';
+      expect(() => publicBaseUrl()).toThrow(/must be an origin, with no path/);
+    });
+
+    // The URL built from this carries a one-time upload token and the document
+    // body to a third party.
+    it('rejects cleartext for a remote host', () => {
+      process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL =
+        'http://mcp.example.com';
+      expect(() => publicBaseUrl()).toThrow(/must use https/);
+    });
+
     it('throws when unset', () => {
       delete process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL;
       expect(() => publicBaseUrl()).toThrow(
@@ -272,4 +320,26 @@ describe('environment readers', () => {
       );
     });
   });
+});
+
+describe('isLoopbackHostname', () => {
+  // The rejection message and the README both promise "a loopback host", so
+  // the set has to match what a developer's local server actually prints.
+  it.each([
+    'localhost',
+    'api.localhost',
+    '127.0.0.1',
+    '127.0.0.2',
+    '0.0.0.0',
+    '[::1]',
+  ])('treats %s as loopback', (h) => {
+    expect(isLoopbackHostname(h)).toBe(true);
+  });
+
+  it.each(['mcp.llamaindex.ai', 'localhost.example.com', '10.0.0.1'])(
+    'does not treat %s as loopback',
+    (h) => {
+      expect(isLoopbackHostname(h)).toBe(false);
+    }
+  );
 });

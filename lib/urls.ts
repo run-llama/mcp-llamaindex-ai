@@ -1,13 +1,29 @@
 /**
- * Constraints a caller places on a configured URL. The three consumers of this
- * helper do not want the same thing: an OAuth issuer must be an https origin
- * with no path, while the upload base URL is allowed a path and allowed http
- * against localhost.
+ * Hosts that never leave the machine. Used to decide where cleartext http is
+ * acceptable, and shared with the region guard so both layers agree on what
+ * "local" means.
+ */
+export function isLoopbackHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === 'localhost' ||
+    h.endsWith('.localhost') ||
+    h === '[::1]' ||
+    h === '0.0.0.0' ||
+    /^127\./.test(h)
+  );
+}
+
+/**
+ * Constraints a caller places on a configured URL. The consumers of this helper
+ * do not all want the same thing, and the differences are load-bearing: an
+ * OAuth issuer must be an https origin with no path, while a base URL that
+ * paths get appended to must simply not carry one of its own.
  */
 export type NormalizeOptions = {
   /** Reject a path component. For values used as an origin or an issuer. */
   originOnly?: boolean;
-  /** Reject cleartext http. */
+  /** Reject cleartext http, except against a loopback host. */
   requireHttps?: boolean;
 };
 
@@ -17,7 +33,7 @@ export type NormalizeOptions = {
  * set to a bare host in production, so both forms are accepted.
  *
  * The result is built from the parsed URL rather than the input string, so host
- * case and IDN reach consumers in the form the network actually uses.
+ * case, IDN and a trailing dot reach consumers in the form the network wants.
  */
 export function normalizeBaseUrl(
   raw: string,
@@ -46,9 +62,13 @@ export function normalizeBaseUrl(
     );
   }
 
-  // Requires `://`, so a bare `host:port` is not misread as a scheme named
-  // after its own hostname.
-  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(trimmed)?.[1]?.toLowerCase();
+  // A scheme is a prefix before `:` that is not followed by a digit. Requiring
+  // `://` instead would misread `https:/host` (one slash, which the URL parser
+  // repairs) as having no scheme; testing only for `:` would misread the port
+  // in a bare `localhost:8000` as a scheme named after its own host.
+  const scheme = /^([a-z][a-z0-9+.-]*):(?!\d)/i
+    .exec(trimmed)?.[1]
+    ?.toLowerCase();
   if (scheme && scheme !== 'http' && scheme !== 'https') {
     throw new Error(`${varName} must use http or https, not "${scheme}:"`);
   }
@@ -61,18 +81,24 @@ export function normalizeBaseUrl(
   } catch {
     throw new Error(`${varName} is not a valid URL`);
   }
-  if (!url.hostname) {
+
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+  if (!hostname) {
     throw new Error(`${varName} has no host`);
   }
-  // Canonicalising through `url.origin` would drop these silently. Say so
-  // instead: an operator who put credentials here needs to know they are unused,
-  // and fetch() refuses a URL that carries them.
+  // Canonicalising would drop these silently. Say so instead: an operator who
+  // put credentials here needs to know they are unused, and fetch() refuses a
+  // URL that carries them.
   if (url.username || url.password) {
     throw new Error(`${varName} must not embed credentials`);
   }
-  if (opts.requireHttps && url.protocol !== 'https:') {
+  if (
+    opts.requireHttps &&
+    url.protocol !== 'https:' &&
+    !isLoopbackHostname(hostname)
+  ) {
     throw new Error(
-      `${varName} must use https — "${url.protocol}" would carry OAuth codes and tokens in cleartext.`
+      `${varName} must use https for "${hostname}" — cleartext would expose what this URL carries.`
     );
   }
   const path = url.pathname.replace(/\/+$/, '');
@@ -80,17 +106,24 @@ export function normalizeBaseUrl(
     throw new Error(`${varName} must be an origin, with no path ("${path}")`);
   }
 
-  return `${url.origin}${path}`;
+  // Rebuilt rather than taken from `url.origin`, which keeps a trailing dot;
+  // that dot is forbidden in the TLS SNI extension and many edge terminators
+  // reject it, so it must not reach a client.
+  const port = url.port ? `:${url.port}` : '';
+  return `${url.protocol}//${hostname}${port}${path}`;
 }
 
 /**
- * Public base URL of this deployment, as a canonical absolute URL.
+ * Public base URL of this deployment, as a canonical absolute origin.
  *
  * For contexts with no incoming request to derive an origin from — the
  * `getUploadUrl` tool hands this to a remote agent. Anything answering an HTTP
  * request should use that request's own origin instead, so the value stays
- * correct on preview deployments and domain aliases. A path is permitted here:
- * this is an upload base, not an origin.
+ * correct on preview deployments and domain aliases.
+ *
+ * originOnly, because both consumers append an absolute app path to it and no
+ * basePath is configured; requireHttps, because the URL built from it carries a
+ * one-time upload token and the document body to a third party.
  */
 export function publicBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL;
@@ -99,5 +132,8 @@ export function publicBaseUrl(): string {
       'NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL environment variable not set'
     );
   }
-  return normalizeBaseUrl(raw, 'NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL');
+  return normalizeBaseUrl(raw, 'NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL', {
+    originOnly: true,
+    requireHttps: true,
+  });
 }

@@ -13,7 +13,12 @@ export async function GET() {
   try {
     const response = await fetch(
       `${origin}/.well-known/oauth-authorization-server`,
-      { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) }
+      {
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        // Matches the cache-control below, so a document that changes a few
+        // times a year is not re-fetched once per discovery request.
+        next: { revalidate: 300 },
+      }
     );
     // Forward the upstream failure as a failure. Re-serving an error body at 200
     // would have clients accept it as metadata, and defeats their retry-on-5xx.
