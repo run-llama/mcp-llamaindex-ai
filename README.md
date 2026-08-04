@@ -133,6 +133,8 @@ Copy the example below into a `.env.local` file and fill in your values:
 WORKOS_API_KEY=sk_...
 WORKOS_CLIENT_ID=client_...
 WORKOS_COOKIE_PASSWORD=<random-32-char-secret>   # used to sign session cookies
+# Must be https and must not carry a path: it is advertised as the OAuth
+# issuer and is where the discovery document is fetched from.
 WORKOS_AUTHKIT_DOMAIN=https://<your-authkit-domain>.authkit.app
 NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback
 
@@ -145,8 +147,12 @@ NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=http://localhost:3000
 # `eu` -> api.cloud.eu.llamaindex.ai.
 LLAMA_CLOUD_REGION=na
 
-# Optional override of the API base derived from LLAMA_CLOUD_REGION, for local
-# development or staging. It may not point at another region's API.
+# Optional override of the API base, for local development.
+# May only be a LlamaCloud region API (which then determines the region, so
+# setting this alone is enough) or a loopback host with an explicit scheme
+# (which requires LLAMA_CLOUD_REGION to be set). https is required for anything
+# non-loopback. Arbitrary hosts — including staging APIs — are refused: a
+# deployment that promises a region must not silently talk to somewhere else.
 # LLAMA_CLOUD_BASE_URL=http://localhost:8000
 
 # Redis — required for the pre-signed upload URL feature

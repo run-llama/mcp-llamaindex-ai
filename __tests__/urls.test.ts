@@ -42,10 +42,43 @@ describe('normalizeBaseUrl', () => {
     );
   });
 
-  it('preserves a path', () => {
+  it('preserves a path by default', () => {
     expect(normalizeBaseUrl('example.com/base', V)).toBe(
       'https://example.com/base'
     );
+  });
+
+  // A bare host:port must not be read as a scheme named after its own host.
+  it('accepts a bare host and port', () => {
+    expect(normalizeBaseUrl('localhost:8000', V)).toBe(
+      'https://localhost:8000'
+    );
+  });
+
+  describe('caller constraints', () => {
+    it('originOnly rejects a path', () => {
+      expect(() =>
+        normalizeBaseUrl('example.com/base', V, { originOnly: true })
+      ).toThrow(/must be an origin, with no path/);
+    });
+
+    it('originOnly accepts a trailing slash as no path', () => {
+      expect(
+        normalizeBaseUrl('https://example.com/', V, { originOnly: true })
+      ).toBe('https://example.com');
+    });
+
+    it('requireHttps rejects cleartext', () => {
+      expect(() =>
+        normalizeBaseUrl('http://login.example.com', V, { requireHttps: true })
+      ).toThrow(/must use https/);
+    });
+
+    it('requireHttps allows https', () => {
+      expect(
+        normalizeBaseUrl('login.example.com', V, { requireHttps: true })
+      ).toBe('https://login.example.com');
+    });
   });
 
   describe('canonicalisation', () => {
@@ -135,6 +168,20 @@ describe('normalizeBaseUrl', () => {
       );
     });
 
+    // The WHATWG parser treats a backslash like a slash in the authority, so
+    // this spelling would otherwise resolve to a perfectly valid absolute URL.
+    it('rejects the backslash spelling of a protocol-relative value', () => {
+      expect(() =>
+        normalizeBaseUrl(String.raw`\\login.example.com`, V)
+      ).toThrow(/not protocol-relative/);
+    });
+
+    it('rejects a value containing a backslash', () => {
+      expect(() =>
+        normalizeBaseUrl(String.raw`mcp.llamaindex.ai\evil`, V)
+      ).toThrow(/not protocol-relative/);
+    });
+
     it('rejects a value with no host', () => {
       expect(() => normalizeBaseUrl('https://', V)).toThrow(/SOME_VAR/);
     });
@@ -202,6 +249,20 @@ describe('environment readers', () => {
     it('resolves the eu authkit domain', () => {
       process.env.WORKOS_AUTHKIT_DOMAIN = 'login.eu.llamaindex.ai';
       expect(authkitOrigin()).toBe('https://login.eu.llamaindex.ai');
+    });
+
+    // This value is advertised as the OAuth issuer; http would carry the
+    // authorization code and the access token in the clear.
+    it('refuses a cleartext authkit domain', () => {
+      process.env.WORKOS_AUTHKIT_DOMAIN = 'http://login.example.com';
+      expect(() => authkitOrigin()).toThrow(/must use https/);
+    });
+
+    // RFC 8414 looks for a path-ful issuer's metadata elsewhere, and the proxy
+    // would fetch the wrong URL.
+    it('refuses an authkit domain carrying a path', () => {
+      process.env.WORKOS_AUTHKIT_DOMAIN = 'login.llamaindex.ai/authkit';
+      expect(() => authkitOrigin()).toThrow(/must be an origin, with no path/);
     });
 
     it('throws when unset', () => {
