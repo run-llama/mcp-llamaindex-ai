@@ -140,8 +140,14 @@ NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback
 # Use http://localhost:3000 for local dev
 NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=http://localhost:3000
 
-# LlamaCloud (optional — overrides the default API base)
-LLAMA_CLOUD_BASE_URL=https://api.cloud.llamaindex.ai
+# LlamaCloud region this deployment serves: `na` (default) or `eu`.
+# Selects the API base URL; `na` -> api.cloud.llamaindex.ai,
+# `eu` -> api.cloud.eu.llamaindex.ai.
+LLAMA_CLOUD_REGION=na
+
+# Optional override of the API base derived from LLAMA_CLOUD_REGION, for local
+# development or staging. It may not point at another region's API.
+# LLAMA_CLOUD_BASE_URL=http://localhost:8000
 
 # Redis — required for the pre-signed upload URL feature
 REDIS_URI=redis://localhost:6379
