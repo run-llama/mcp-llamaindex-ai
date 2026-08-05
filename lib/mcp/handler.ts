@@ -3,7 +3,7 @@ import {
   experimental_withMcpAuth,
 } from '@vercel/mcp-adapter';
 import { getWorkOS } from '@workos-inc/authkit-nextjs';
-import { jwtVerify, createRemoteJWKSet } from 'jose';
+import { jwtVerify, createRemoteJWKSet, type JWTPayload } from 'jose';
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { User, WorkOSAuthInfo } from '@/lib/auth/types';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
@@ -86,16 +86,21 @@ export function buildMcpRouteHandler(
         return undefined;
       }
 
-      // Only token verification is converted to a 401. A WorkOS or rate-limiter
-      // fault below is a server problem, and reporting it as `invalid_token`
-      // would tell a user holding a perfectly good credential to re-authenticate
-      // — a loop they cannot exit. Those propagate and the adapter renders a 500.
-      let payload;
+      // Only a fault in the token itself becomes a 401. Everything else here is
+      // a server problem — including a JWKS fetch failure, which surfaces from
+      // `jwtVerify` alongside real signature errors — and answering those with
+      // `invalid_token` would tell users holding good credentials to
+      // re-authenticate against the same WorkOS that is down.
+      let payload: JWTPayload;
       try {
         ({ payload } = await jwtVerify(token, JWKS));
       } catch (error: unknown) {
         logger.error('Token verification failed:', error);
-        throw invalidTokenError(error, token);
+        const rejection = invalidTokenError(error, token);
+        if (!rejection) {
+          throw error;
+        }
+        throw rejection;
       }
 
       if (!payload.sub) {

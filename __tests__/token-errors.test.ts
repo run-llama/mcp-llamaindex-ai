@@ -143,20 +143,50 @@ describe('authErrorMessage', () => {
         GENERIC,
       ],
       ['ERR_JWS_INVALID', 'Invalid Compact JWS', UNVERIFIABLE],
+      ['ERR_JWT_INVALID', 'Invalid JWT', UNVERIFIABLE],
     ])('replaces the %s message', async (code, message, expected) => {
       const { authErrorMessage } = await load();
 
       expect(authErrorMessage({ code, message }, EU_TOKEN)).toBe(expected);
     });
 
-    it('emits no character that breaks the header grammar', async () => {
+    // Asserted by equality, not by scanning for header metacharacters: a
+    // passthrough whose text happens to contain none of them would pass that.
+    it('never echoes an attacker-supplied crit parameter', async () => {
       const { authErrorMessage } = await load();
       const hostile = {
         code: 'ERR_JOSE_NOT_SUPPORTED',
         message: 'x", resource_metadata="https://evil.example\r\nX-Injected: 1',
       };
 
-      expect(authErrorMessage(hostile, EU_TOKEN)).not.toMatch(/["\r\n\\]/);
+      expect(authErrorMessage(hostile, EU_TOKEN)).toBe(GENERIC);
+    });
+  });
+
+  // `jwtVerify` fetches the remote JWKS, so a WorkOS outage surfaces from the
+  // same call as a bad signature. Answering those with `invalid_token` would
+  // send every client to re-authenticate against the WorkOS that is down.
+  describe('server faults are not the token’s fault', () => {
+    beforeEach(() => {
+      process.env.LLAMA_CLOUD_REGION = 'na';
+    });
+
+    it.each([
+      ['a JWKS non-200', 'ERR_JOSE_GENERIC'],
+      ['a JWKS timeout', 'ERR_JWKS_TIMEOUT'],
+      ['a malformed JWKS', 'ERR_JWKS_INVALID'],
+      ['an ambiguous JWKS', 'ERR_JWKS_MULTIPLE_MATCHING_KEYS'],
+    ])('returns undefined for %s', async (_label, code) => {
+      const { authErrorMessage, invalidTokenError } = await load();
+
+      expect(authErrorMessage({ code }, EU_TOKEN)).toBeUndefined();
+      expect(invalidTokenError({ code }, EU_TOKEN)).toBeUndefined();
+    });
+
+    it('returns undefined for a transport error carrying no code', async () => {
+      const { authErrorMessage } = await load();
+
+      expect(authErrorMessage(new TypeError('fetch failed'))).toBeUndefined();
     });
   });
 
@@ -183,14 +213,17 @@ describe('authErrorMessage', () => {
       expect(authErrorMessage(KEY_ERR, token)).toBe(UNVERIFIABLE);
     });
 
+    // An error with no code is not attributable to the token, so the caller
+    // rethrows it and the adapter renders a 500.
     it.each([
       ['an error with no code', {}],
       ['undefined', undefined],
       ['an Error instance', new Error('boom')],
-    ])('falls back for %s', async (_label, error) => {
+      ['an unrecognised code', { code: 'ERR_SOMETHING_NEW' }],
+    ])('declines to classify %s', async (_label, error) => {
       const { authErrorMessage } = await load();
 
-      expect(authErrorMessage(error)).toBe(GENERIC);
+      expect(authErrorMessage(error)).toBeUndefined();
     });
 
     it('does not resolve a region hint on a misconfigured deployment', async () => {
@@ -216,7 +249,7 @@ describe('invalidTokenError', () => {
     const err = invalidTokenError(KEY_ERR, EU_TOKEN);
 
     expect(err).toBeInstanceOf(InvalidTokenError);
-    expect(err.errorCode).toBe('invalid_token');
-    expect(err.message).toBe(EU_HINT);
+    expect(err?.errorCode).toBe('invalid_token');
+    expect(err?.message).toBe(EU_HINT);
   });
 });
