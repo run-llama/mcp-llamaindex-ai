@@ -15,9 +15,19 @@ export class RegionConfigError extends Error {
   }
 }
 
-type RegionProfile = {
+export type RegionProfile = {
   readonly label: string;
   readonly apiBaseUrl: string;
+  /** Only read for the region a deployment is *not* serving. */
+  readonly consoleUrl: string;
+  readonly mcpUrl: string;
+  /**
+   * Recognises the `iss` of a token this deployment cannot verify. Distinct
+   * from `authkitOrigin()` in lib/authkit.ts, which resolves *this*
+   * deployment's issuer from `WORKOS_AUTHKIT_DOMAIN` — a sibling's origin
+   * cannot be learned from this deployment's environment, so it is stated here.
+   */
+  readonly authkitIssuerOrigin: string;
   /**
    * Vercel regions whose compute satisfies this region's residency commitment.
    * Documents are terminated and parsed inside the function, so the API host
@@ -25,10 +35,10 @@ type RegionProfile = {
    *
    * Only `eu` is constrained: it is the region with a published commitment
    * ("all data provided will remain within the EU region for storage and
-   * processing"). Deliberately excludes lhr1 and zrh1 — the UK and Switzerland
-   * hold adequacy decisions but are not in the EU. `na` is left unconstrained
-   * because there is no equivalent commitment and the existing deployment does
-   * not pin a function region.
+   * processing"). Deliberately excludes lhr1 — the UK holds an adequacy
+   * decision but is not in the EU. `na` is left unconstrained because there is
+   * no equivalent commitment and the existing deployment does not pin a
+   * function region.
    */
   readonly computeRegions?: readonly string[];
 };
@@ -37,10 +47,16 @@ const PROFILES: Record<Region, RegionProfile> = Object.freeze({
   na: Object.freeze({
     label: 'North America (NA)',
     apiBaseUrl: 'https://api.cloud.llamaindex.ai',
+    consoleUrl: 'https://cloud.llamaindex.ai',
+    mcpUrl: 'https://mcp.llamaindex.ai',
+    authkitIssuerOrigin: 'https://login.llamaindex.ai',
   }),
   eu: Object.freeze({
     label: 'Europe (EU)',
     apiBaseUrl: 'https://api.cloud.eu.llamaindex.ai',
+    consoleUrl: 'https://cloud.eu.llamaindex.ai',
+    mcpUrl: 'https://mcp.eu.llamaindex.ai',
+    authkitIssuerOrigin: 'https://login.eu.llamaindex.ai',
     computeRegions: Object.freeze(['fra1', 'cdg1', 'arn1', 'dub1']),
   }),
 });
@@ -169,6 +185,11 @@ export function getRegion(): Region {
 
 export function regionProfile(): RegionProfile {
   return PROFILES[getRegion()];
+}
+
+/** The region this deployment does *not* serve. */
+export function siblingProfile(): RegionProfile {
+  return PROFILES[getRegion() === 'eu' ? 'na' : 'eu'];
 }
 
 export function llamaCloudBaseUrl(): string {

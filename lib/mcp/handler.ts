@@ -4,10 +4,12 @@ import {
 } from '@vercel/mcp-adapter';
 import { getWorkOS } from '@workos-inc/authkit-nextjs';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
+import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { User, WorkOSAuthInfo } from '@/lib/auth/types';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { getLogger } from '@/lib/observability/logger';
 import { extractRateLimitFromResponse } from '@/lib/auth/helpers';
+import { invalidTokenError } from '@/lib/auth/token-errors';
 import type { McpServer } from '@/lib/mcp/tools/tools';
 
 const workos = getWorkOS();
@@ -84,51 +86,47 @@ export function buildMcpRouteHandler(
         return undefined;
       }
 
+      // Only token verification is converted to a 401. A WorkOS or rate-limiter
+      // fault below is a server problem, and reporting it as `invalid_token`
+      // would tell a user holding a perfectly good credential to re-authenticate
+      // — a loop they cannot exit. Those propagate and the adapter renders a 500.
+      let payload;
       try {
-        const { payload } = await jwtVerify(token, JWKS);
+        ({ payload } = await jwtVerify(token, JWKS));
+      } catch (error: unknown) {
+        logger.error('Token verification failed:', error);
+        throw invalidTokenError(error, token);
+      }
 
-        if (!payload.sub) {
-          throw new Error('Invalid token: missing sub claim');
-        }
+      if (!payload.sub) {
+        logger.error('Token carried no sub claim');
+        throw new InvalidTokenError('Invalid token. Please sign in again.');
+      }
 
-        const userProfile = await workos.userManagement.getUser(payload.sub);
+      const userProfile = await workos.userManagement.getUser(payload.sub);
 
-        const user: User = {
-          id: userProfile.id,
-          email: userProfile.email,
-          firstName: userProfile.firstName,
-          lastName: userProfile.lastName,
-          profilePictureUrl: userProfile.profilePictureUrl,
-        };
+      const user: User = {
+        id: userProfile.id,
+        email: userProfile.email,
+        firstName: userProfile.firstName,
+        lastName: userProfile.lastName,
+        profilePictureUrl: userProfile.profilePictureUrl,
+      };
 
-        request.headers.set('x-user-id', userProfile.id);
-        const limiterResponse = await applyRateLimit(request);
+      request.headers.set('x-user-id', userProfile.id);
+      const limiterResponse = await applyRateLimit(request);
 
-        const workosAuthInfo: WorkOSAuthInfo = {
+      logger.debug('Token validated and ready to get passed through');
+      return {
+        token,
+        clientId: clientId!,
+        scopes: [],
+        extra: {
           user,
           claims: payload,
           rateLimit: extractRateLimitFromResponse(limiterResponse),
-        };
-
-        logger.debug('Token validated and ready to get passed through');
-        return {
-          token,
-          clientId: clientId!,
-          scopes: [],
-          extra: workosAuthInfo,
-        };
-      } catch (error: unknown) {
-        console.error('Authentication error:', error);
-        const errorObj = error as { code?: string; message?: string };
-        const errorMessage =
-          errorObj.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED'
-            ? 'Invalid token signature. Please sign in again.'
-            : errorObj.message ||
-              'Authentication failed. Please sign in again.';
-
-        // eslint-disable-next-line preserve-caught-error
-        throw new Error(errorMessage);
-      }
+        } satisfies WorkOSAuthInfo,
+      };
     },
     {
       required: false,
