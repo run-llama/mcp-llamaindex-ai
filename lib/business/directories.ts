@@ -123,9 +123,12 @@ export async function listDirectories({
   pageSize?: number | null;
   pageToken?: string | null;
 }): Promise<ListDirectoriesResult> {
+  // Query params must be OMITTED when absent, never sent as null: the SDK
+  // serializes null to an empty value (`name=`), which the API reads as a
+  // filter on the empty string and matches nothing. Body params may be null.
   const page = await client(authToken).beta.directories.list({
-    project_id: projectId,
-    name,
+    project_id: projectId ?? undefined,
+    name: name ?? undefined,
     type,
     page_size: pageSize ?? undefined,
     page_token: pageToken ?? undefined,
@@ -159,12 +162,13 @@ export async function listDirectory({
   includeDownloadUrls?: boolean;
 }): Promise<ListDirectoryResult> {
   const c = client(authToken);
+  // See the note in listDirectories: absent query params are omitted, not null.
   const [directory, page] = await Promise.all([
-    c.beta.directories.get(directoryId, { project_id: projectId }),
+    c.beta.directories.get(directoryId, { project_id: projectId ?? undefined }),
     c.beta.directories.files.list(directoryId, {
-      project_id: projectId,
-      display_name_contains: displayNameContains,
-      expand: includeDownloadUrls ? ['download_url'] : null,
+      project_id: projectId ?? undefined,
+      display_name_contains: displayNameContains ?? undefined,
+      expand: includeDownloadUrls ? ['download_url'] : undefined,
       page_size: pageSize ?? undefined,
       page_token: pageToken ?? undefined,
     }),
@@ -218,7 +222,7 @@ export async function addFilesToDirectory({
     try {
       const response = await c.beta.directories.files.add(directoryId, {
         file_id: fileId,
-        project_id: projectId,
+        project_id: projectId ?? undefined,
       });
       added.push({
         fileId,

@@ -446,7 +446,9 @@ export async function createIndex({
   // server-side; accepting `daily` would persist a setting that never runs.
   const response = await client.beta.indexes.create({
     source_directory_id: sourceDirectoryId,
-    project_id: projectId,
+    // project_id is a query param: omit when absent. Sending null serializes
+    // to an empty value, which the API treats as a filter/selector on "".
+    project_id: projectId ?? undefined,
     name,
     description,
     store_attachments: storeAttachments,
@@ -477,7 +479,7 @@ export async function getIndexStatus({
     baseURL: llamaCloudBaseUrl(),
   });
   const response = await client.beta.indexes.get(indexId, {
-    project_id: projectId,
+    project_id: projectId ?? undefined,
   });
   return toIndexSummary(response);
 }
@@ -496,7 +498,9 @@ export async function syncIndex({
     baseURL: llamaCloudBaseUrl(),
   });
   try {
-    await client.beta.indexes.sync(indexId, { project_id: projectId });
+    await client.beta.indexes.sync(indexId, {
+      project_id: projectId ?? undefined,
+    });
     return {
       indexId,
       syncStarted: true,
