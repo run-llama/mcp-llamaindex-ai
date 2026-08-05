@@ -3,12 +3,7 @@ import { User } from '../lib/auth/types';
 import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 describe('Authentication Helpers', () => {
-  const mockUser: User = {
-    id: 'user_123',
-    email: 'test@example.com',
-    firstName: 'Test',
-    lastName: 'User',
-  };
+  const mockUser: User = { id: 'user_123' };
 
   const mockAuthInfo: AuthInfo = {
     token: 'mock-token',
