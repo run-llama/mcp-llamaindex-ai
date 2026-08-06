@@ -399,11 +399,7 @@ export function registerLitParseTool(server: McpServer) {
           span.setAttribute('tool.markdown', args.markdown);
         if (typeof args.includeJson !== 'undefined')
           span.setAttribute('tool.include_json', args.includeJson);
-        if (args.pages)
-          span.setAttribute(
-            'tool.version',
-            args.pages.map((p) => p.toString).join(', ')
-          );
+        if (args.pages) span.setAttribute('tool.page_count', args.pages.length);
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
         const logger = getLogger();
