@@ -42,7 +42,14 @@ MCP Client (Claude, Cursor, etc.)
 
 ## Using the hosted version
 
-A production instance is already running at **`https://mcp.llamaindex.ai/mcp`**. You can connect any MCP-compatible client directly — no server setup required.
+Production instances are already running in two regions. Pick the one that matches your LlamaCloud account — no server setup required either way.
+
+| LlamaCloud account | MCP endpoint |
+|------|-------------|
+| `cloud.llamaindex.ai` (NA) | **`https://mcp.llamaindex.ai/mcp`** |
+| `cloud.eu.llamaindex.ai` (EU) | **`https://mcp.eu.llamaindex.ai/mcp`** |
+
+Region is a property of your account, not a per-session choice: a token issued in one region is rejected by the other with a `401` naming the correct endpoint. The client configurations below use the NA URL — substitute the EU URL if your account lives in the EU.
 
 ### Claude Desktop
 

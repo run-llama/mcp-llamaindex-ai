@@ -1,7 +1,7 @@
 ---
 name: llamaparse-mcp
 description: Skill on how to use the LlamaParse MCP tools
-compatibility: Needs authenticated access to https://mcp.llamaindex.ai/mcp
+compatibility: Needs authenticated access to a regional endpoint — https://mcp.llamaindex.ai/mcp (NA) or https://mcp.eu.llamaindex.ai/mcp (EU)
 license: MIT
 metadata:
   author: LlamaIndex
@@ -13,6 +13,8 @@ metadata:
 ## Authentication
 
 All tools require a valid session. If a tool call returns an authentication error, ask the user to re-authenticate before retrying. Do not retry automatically without prompting the user.
+
+The server runs as two regional deployments — `https://mcp.llamaindex.ai/mcp` for accounts on `cloud.llamaindex.ai`, and `https://mcp.eu.llamaindex.ai/mcp` for accounts on `cloud.eu.llamaindex.ai`. Region follows the user's LlamaCloud account, so it is not something to switch mid-session. A token issued for one region is rejected by the other with a `401` that names the correct endpoint; when that happens, tell the user to point their client at the endpoint named in the error rather than retrying.
 
 ## Uploading a File
 
