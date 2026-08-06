@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 import { fileExtension, redactFileId } from '../lib/observability/logger';
@@ -6,7 +6,7 @@ import { fileExtension, redactFileId } from '../lib/observability/logger';
 describe('fileExtension', () => {
   it('returns the lowercased extension', () => {
     expect(fileExtension('Report.PDF')).toBe('pdf');
-    expect(fileExtension('archive.tar.gz')).toBe('gz');
+    expect(fileExtension('archive.tar.docx')).toBe('docx');
   });
 
   it('never returns any part of the name itself', () => {
@@ -19,8 +19,17 @@ describe('fileExtension', () => {
     expect(fileExtension('.env')).toBe('none');
   });
 
-  it('refuses an implausibly long extension rather than echoing it', () => {
-    expect(fileExtension(`f.${'a'.repeat(200)}`)).toBe('other');
+  // The trailing segment of these is part of the name, not an extension.
+  // Echoing it back would leak exactly what this helper exists to withhold.
+  it.each([
+    'acme.merger',
+    'Q3.plan draft',
+    'project.smith-deposition',
+    '2026.acquisition',
+    '/tmp/a.b/README',
+    `f.${'a'.repeat(200)}`,
+  ])('does not echo the trailing segment of %s', (fileName) => {
+    expect(fileExtension(fileName)).toBe('other');
   });
 });
 
@@ -39,17 +48,20 @@ describe('redactFileId', () => {
 });
 
 describe('span attributes', () => {
-  const source = readFileSync(
-    join(__dirname, '..', 'lib', 'mcp', 'tools', 'tools.ts'),
-    'utf8'
-  );
+  const lib = join(__dirname, '..', 'lib');
+  const sources = readdirSync(lib, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.ts'))
+    .map((f) => readFileSync(join(lib, f), 'utf8'))
+    .join('\n');
 
   // These carried user-supplied content to the trace backend. Reintroducing any
   // of them ships document names, prompts or search queries to a third party.
+  // The closing quote keeps tool.query from matching tool.query_length.
   it.each(['tool.file_name', 'tool.prompt', 'tool.grep_pattern', 'tool.query'])(
-    'does not record %s',
+    'does not record %s anywhere under lib/',
     (attribute) => {
-      expect(source).not.toContain(`'${attribute}'`);
+      const quoted = new RegExp(`['"\`]${attribute.replace('.', '\\.')}['"\`]`);
+      expect(sources).not.toMatch(quoted);
     }
   );
 });
