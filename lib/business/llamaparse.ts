@@ -252,14 +252,25 @@ export async function splitFile({
   throw new Error('No split result was produced');
 }
 
-export async function getProjects(authToken: string): Promise<string[]> {
+export interface ProjectSummary {
+  projectId: string;
+  name: string;
+  isDefault: boolean;
+}
+
+export async function getProjects(
+  authToken: string
+): Promise<ProjectSummary[]> {
   const client = new LlamaCloud({
     apiKey: authToken,
     baseURL: llamaCloudBaseUrl(),
   });
   const projects = await client.projects.list();
-  const projectIds = projects.map((p) => p.id);
-  return projectIds;
+  return projects.map((p) => ({
+    projectId: p.id,
+    name: p.name,
+    isDefault: p.is_default ?? false,
+  }));
 }
 
 export async function generateExtractSchema({
@@ -372,6 +383,144 @@ export async function listIndexes({
     s += `- ${idx.name} (ID: ${idx.indexId}): ${idx.description}\n`;
   }
   return s;
+}
+
+export interface IndexSummary {
+  /**
+   * The index ID is the export config ID: `GET /indexes/{index_id}`,
+   * `POST /indexes/{index_id}/sync` and `POST /retrieval/retrieve` all key on
+   * it, and `listIndexes` reports it. The `id` field on the create response is
+   * a different identifier and is not accepted by any of them.
+   */
+  indexId: string;
+  name: string;
+  sourceDirectoryId: string;
+  status: string | null;
+  lastSyncedAt: string | null;
+  lastExportedAt: string | null;
+}
+
+function toIndexSummary(response: {
+  export_config_id: string;
+  name: string;
+  source_directory_id: string;
+  last_synced_at?: string | null;
+  last_exported_at?: string | null;
+  metadata?: { status?: unknown } | null;
+}): IndexSummary {
+  const status = response.metadata?.status;
+  return {
+    indexId: response.export_config_id,
+    name: response.name,
+    sourceDirectoryId: response.source_directory_id,
+    // `metadata` is an open schema — only `ready` and `failed` are stable, so
+    // this is passed through as a string rather than narrowed to an enum.
+    status: typeof status === 'string' ? status : null,
+    lastSyncedAt: response.last_synced_at ?? null,
+    lastExportedAt: response.last_exported_at ?? null,
+  };
+}
+
+export async function createIndex({
+  authToken,
+  sourceDirectoryId,
+  projectId = null,
+  name = null,
+  description = null,
+  storeAttachments = null,
+  parseConfigId = null,
+}: {
+  authToken: string;
+  sourceDirectoryId: string;
+  projectId?: string | null;
+  name?: string | null;
+  description?: string | null;
+  storeAttachments?: string[] | null;
+  parseConfigId?: string | null;
+}): Promise<IndexSummary> {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: llamaCloudBaseUrl(),
+  });
+  // sync_frequency is deliberately not exposed. Only `manual` is implemented
+  // server-side; accepting `daily` would persist a setting that never runs.
+  const response = await client.beta.indexes.create({
+    source_directory_id: sourceDirectoryId,
+    // project_id is a query param: omit when absent. Sending null serializes
+    // to an empty value, which the API treats as a filter/selector on "".
+    project_id: projectId ?? undefined,
+    name,
+    description,
+    store_attachments: storeAttachments,
+    products: parseConfigId
+      ? [{ product_type: 'parse', product_config_id: parseConfigId }]
+      : null,
+  });
+
+  if (!response.export_config_id) {
+    throw new Error(
+      'Index was created but has no export config ID yet, so it cannot be queried. Retry getIndexStatus shortly.'
+    );
+  }
+  return toIndexSummary(response);
+}
+
+export async function getIndexStatus({
+  authToken,
+  indexId,
+  projectId = null,
+}: {
+  authToken: string;
+  indexId: string;
+  projectId?: string | null;
+}): Promise<IndexSummary> {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: llamaCloudBaseUrl(),
+  });
+  const response = await client.beta.indexes.get(indexId, {
+    project_id: projectId ?? undefined,
+  });
+  return toIndexSummary(response);
+}
+
+export async function syncIndex({
+  authToken,
+  indexId,
+  projectId = null,
+}: {
+  authToken: string;
+  indexId: string;
+  projectId?: string | null;
+}): Promise<{ indexId: string; syncStarted: boolean; message: string }> {
+  const client = new LlamaCloud({
+    apiKey: authToken,
+    baseURL: llamaCloudBaseUrl(),
+  });
+  try {
+    await client.beta.indexes.sync(indexId, {
+      project_id: projectId ?? undefined,
+    });
+    return {
+      indexId,
+      syncStarted: true,
+      message:
+        'Sync started. Poll getIndexStatus until status is ready before querying.',
+    };
+  } catch (err) {
+    // A sync already in flight is an expected state, not a failure to retry
+    // into — surface it as a plain outcome so the agent waits instead.
+    const message = err instanceof Error ? err.message : String(err);
+    if (/already (running|in progress)/i.test(message)) {
+      return {
+        indexId,
+        syncStarted: false,
+        message:
+          'A sync is already running for this index. Wait for it to finish.',
+      };
+    }
+    throw err;
+  }
 }
 
 export async function searchFilesFromIndex({
