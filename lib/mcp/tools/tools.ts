@@ -15,7 +15,11 @@ import {
   uploadFile,
 } from '@/lib/business/llamaparse';
 import { Category, SplitCategory } from '@/lib/business/types';
-import { getLogger, redactFileId } from '@/lib/observability/logger';
+import {
+  fileExtension,
+  getLogger,
+  redactFileId,
+} from '@/lib/observability/logger';
 import { createMcpHandler } from '@vercel/mcp-adapter';
 import { trace, Span } from '@opentelemetry/api';
 import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
@@ -171,7 +175,7 @@ export function registerUploadFileByUrlTool(server: McpServer) {
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.uploadFileByUrl', async (span) => {
-        span.setAttribute('tool.file_name', args.fileName);
+        span.setAttribute('tool.file_ext', fileExtension(args.fileName));
         if (args.fileType) span.setAttribute('tool.file_type', args.fileType);
         if (args.purpose) span.setAttribute('tool.purpose', args.purpose);
         const logger = getLogger();
@@ -708,7 +712,7 @@ export function registerGenerateExtractionConfigTool(server: McpServer) {
         'tool.generateExtractionConfig',
         async (span) => {
           span.setAttribute('tool.file_id', redactFileId(args.fileId));
-          span.setAttribute('tool.prompt', args.generationPrompt.slice(0, 100));
+          span.setAttribute('tool.prompt_length', args.generationPrompt.length);
           const { authInfo } = extra;
           ensureUserAuthenticated(authInfo);
           const logger = getLogger();
@@ -1094,7 +1098,10 @@ export function registerGrepFileFromIndexTool(
         const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
-        span.setAttribute('tool.grep_pattern', args.pattern as string);
+        span.setAttribute(
+          'tool.grep_pattern_length',
+          (args.pattern as string).length
+        );
         const logger = getLogger();
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
@@ -1176,7 +1183,7 @@ export function registerRetrieveFromIndexTool(
         const indexId = fixedIndexId ?? (args.indexId as string);
         const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
-        span.setAttribute('tool.query', redactFileId(args.query as string));
+        span.setAttribute('tool.query_length', (args.query as string).length);
         const logger = getLogger();
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
