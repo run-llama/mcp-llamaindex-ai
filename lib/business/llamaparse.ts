@@ -1,4 +1,3 @@
-import LlamaCloud from '@llamaindex/llama-cloud';
 import {
   CategoryType,
   ClassifyResult,
@@ -7,7 +6,7 @@ import {
   SplitResult,
 } from './types';
 import { RetrievalGrepResponse } from '@llamaindex/llama-cloud/resources/beta.js';
-import { llamaCloudBaseUrl } from '../region';
+import { llamaCloudClient } from './client';
 
 const MaximumWaitingTime: number = 1800 * 1000;
 const MaxDelay: number = 60;
@@ -31,10 +30,7 @@ export async function uploadFile({
   fileType?: string | undefined;
   projectId?: string | undefined;
 }): Promise<string> {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   let bytes;
   if (typeof fileData === 'string') {
     const binaryString = atob(fileData);
@@ -78,10 +74,7 @@ export async function parseFile({
   projectId?: string | undefined;
   pages?: number[] | undefined;
 }): Promise<ParsingResult> {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const expand = [markdown ? 'markdown_full' : 'text_full'];
   const result = await client.parsing.parse({
     version: version ?? 'latest',
@@ -119,10 +112,7 @@ export async function classifyFile({
   projectId?: string | undefined;
   configurationId?: string | undefined;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
 
   if (!configurationId && !categories) {
     throw new Error(
@@ -195,10 +185,7 @@ export async function splitFile({
   projectId?: string | undefined;
   configurationId?: string | undefined;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
 
   if (!configurationId && !categories) {
     throw new Error(
@@ -253,10 +240,7 @@ export async function splitFile({
 }
 
 export async function getProjects(authToken: string): Promise<string[]> {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const projects = await client.projects.list();
   const projectIds = projects.map((p) => p.id);
   return projectIds;
@@ -273,10 +257,7 @@ export async function generateExtractSchema({
   projectId?: string | undefined;
   generationPrompt: string;
 }): Promise<[string, string]> {
-  const client = new LlamaCloud({
-    apiKey: token,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(token);
   const configCreateReq = await client.extract.generateSchema({
     project_id: projectId,
     prompt: generationPrompt,
@@ -304,10 +285,7 @@ export async function extract({
   projectId?: string | undefined;
   configurationId: string;
 }) {
-  const client = new LlamaCloud({
-    apiKey: token,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(token);
   const response = await client.extract.run({
     file_input: fileId,
     configuration_id: configurationId,
@@ -343,10 +321,7 @@ export async function listIndexes({
   authToken: string;
   projectId?: string | null;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   let pageToken: string | undefined = undefined;
   const indexes: { name: string; indexId: string; description: string }[] = [];
   while (true) {
@@ -387,10 +362,7 @@ export async function searchFilesFromIndex({
   fileName?: string | null;
   fileNameContains?: string | null;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   let pageToken: string | undefined = undefined;
   const files: { name: string; fileId: string }[] = [];
   while (true) {
@@ -435,10 +407,7 @@ export async function readFileFromIndex({
   offset?: number | null;
   maxLength?: number | null;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const response = await client.beta.retrieval.read({
     project_id: projectId,
     file_id: fileId,
@@ -466,10 +435,7 @@ export async function grepFileFromIndex({
   contextChars?: number | null;
   limit?: number | null;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const grepMatches: RetrievalGrepResponse[] = [];
   let pageToken: string | undefined = undefined;
   while (true) {
@@ -510,10 +476,7 @@ export async function retrieveFromIndex({
   topK?: number | null;
   rerankTopN?: number | null;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const response = await client.beta.retrieval.retrieve({
     project_id: projectId,
     index_id: indexId,

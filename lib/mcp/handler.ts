@@ -9,6 +9,10 @@ import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { getLogger } from '@/lib/observability/logger';
 import { extractRateLimitFromResponse } from '@/lib/auth/helpers';
 import { invalidTokenError } from '@/lib/auth/token-errors';
+import {
+  instrumentToolUsage,
+  surfaceFromBasePath,
+} from '@/lib/observability/usage';
 import type { McpServer } from '@/lib/mcp/tools/tools';
 
 const clientId = process.env.WORKOS_CLIENT_ID;
@@ -67,9 +71,14 @@ export function buildMcpRouteHandler(
   basePath: string,
   serverInfo?: McpServerInfo
 ) {
+  // Usage accounting is attached here rather than inside each `register`
+  // function, so a tool added later is covered without anyone remembering to
+  // opt it in.
+  const surface = surfaceFromBasePath(basePath);
+
   const handler = createMcpHandler(
     (server) => {
-      register(server);
+      register(instrumentToolUsage(server, surface));
     },
     { ...serverInfo },
     { basePath }
