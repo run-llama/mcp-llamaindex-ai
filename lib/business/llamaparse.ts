@@ -508,15 +508,20 @@ export async function syncIndex({
         'Sync started. Poll getIndexStatus until status is ready before querying.',
     };
   } catch (err) {
-    // A sync already in flight is an expected state, not a failure to retry
-    // into — surface it as a plain outcome so the agent waits instead.
-    const message = err instanceof Error ? err.message : String(err);
-    if (/already (running|in progress)/i.test(message)) {
+    // A sync already in flight comes back as 409 (conflict) or 429 (rate
+    // limited) — an expected state, not a failure to retry into. Match on the
+    // status code rather than the error text, which isn't a stable contract.
+    // Surface it as a plain outcome and point the agent at getIndexStatus (its
+    // own tool) to see where the running sync stands, rather than retrying.
+    if (
+      err instanceof LlamaCloud.APIError &&
+      (err.status === 409 || err.status === 429)
+    ) {
       return {
         indexId,
         syncStarted: false,
         message:
-          'A sync is already running for this index. Wait for it to finish.',
+          'A sync is already running for this index. Do not retry syncIndex; call getIndexStatus to check its progress and wait until status is ready.',
       };
     }
     throw err;

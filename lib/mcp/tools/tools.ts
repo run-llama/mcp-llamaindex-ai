@@ -1604,7 +1604,7 @@ export function registerGetIndexStatusTool(server: McpServer) {
 export function registerSyncIndexTool(server: McpServer) {
   server.tool(
     'syncIndex',
-    'Re-index a directory, picking up files added or changed since the last run. Indexes do not refresh on their own, so this is the only way an existing index sees new documents. Runs in the background — poll getIndexStatus until status is ready.',
+    'Re-index a directory, picking up files added or changed since the last run. Indexes do not refresh on their own, so this is the only way an existing index sees new documents. Runs in the background — poll getIndexStatus until status is ready. If a sync is already running, this returns syncStarted=false (the underlying API responds 409 or 429): do not retry syncIndex, call getIndexStatus to check the running sync and wait until status is ready.',
     {
       indexId: z
         .string()
