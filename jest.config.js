@@ -19,9 +19,6 @@ const customJestConfig = {
     '!**/.next/**',
   ],
   // Removed coverageThreshold to avoid failing CI on low coverage.
-  moduleNameMapping: {
-    '^@/(.*)$': '<rootDir>/$1',
-  },
 };
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async

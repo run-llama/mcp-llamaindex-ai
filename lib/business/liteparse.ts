@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { LiteParse as LiteParseType } from '@llamaindex/liteparse-wasm';
-import LlamaCloud from '@llamaindex/llama-cloud';
-import { llamaCloudBaseUrl } from '../region';
+import type LlamaCloud from '@llamaindex/llama-cloud';
+import { llamaCloudClient } from './client';
 
 // Lazy loader: initializes the wasm module once and caches the constructor.
 //
@@ -240,10 +240,7 @@ export async function isComplex({
   fileId: string;
   includeLayout?: boolean;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const Liteparse = await getLiteParse();
   const lit = new Liteparse({
     ocrEnabled: false,
@@ -322,10 +319,7 @@ export async function litParse({
   markdown?: boolean;
   includeJson?: boolean;
 }) {
-  const client = new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
+  const client = llamaCloudClient(authToken);
   const Liteparse = await getLiteParse();
   const lit = new Liteparse({
     ocrEnabled: false,

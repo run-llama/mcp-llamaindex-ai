@@ -2,17 +2,19 @@ import {
   createMcpHandler,
   experimental_withMcpAuth,
 } from '@vercel/mcp-adapter';
-import { getWorkOS } from '@workos-inc/authkit-nextjs';
 import { jwtVerify, createRemoteJWKSet, type JWTPayload } from 'jose';
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
-import { User, WorkOSAuthInfo } from '@/lib/auth/types';
+import { WorkOSAuthInfo } from '@/lib/auth/types';
 import { RateLimiterMemory, RateLimiterRes } from 'rate-limiter-flexible';
 import { getLogger } from '@/lib/observability/logger';
 import { extractRateLimitFromResponse } from '@/lib/auth/helpers';
 import { invalidTokenError } from '@/lib/auth/token-errors';
+import {
+  instrumentToolUsage,
+  surfaceFromBasePath,
+} from '@/lib/observability/usage';
 import type { McpServer } from '@/lib/mcp/tools/tools';
 
-const workos = getWorkOS();
 const clientId = process.env.WORKOS_CLIENT_ID;
 
 if (!clientId) {
@@ -69,9 +71,14 @@ export function buildMcpRouteHandler(
   basePath: string,
   serverInfo?: McpServerInfo
 ) {
+  // Usage accounting is attached here rather than inside each `register`
+  // function, so a tool added later is covered without anyone remembering to
+  // opt it in.
+  const surface = surfaceFromBasePath(basePath);
+
   const handler = createMcpHandler(
     (server) => {
-      register(server);
+      register(instrumentToolUsage(server, surface));
     },
     { ...serverInfo },
     { basePath }
@@ -108,17 +115,19 @@ export function buildMcpRouteHandler(
         throw new InvalidTokenError('Invalid token. Please sign in again.');
       }
 
-      const userProfile = await workos.userManagement.getUser(payload.sub);
-
-      const user: User = {
-        id: userProfile.id,
-        email: userProfile.email,
-        firstName: userProfile.firstName,
-        lastName: userProfile.lastName,
-        profilePictureUrl: userProfile.profilePictureUrl,
-      };
-
-      request.headers.set('x-user-id', userProfile.id);
+      // `sub` is the WorkOS user id, so the directory lookup this replaced
+      // returned an id we already had, at the cost of a round-trip per request.
+      //
+      // It did also reject hard-deleted users — but as a 500, which clients
+      // retry, and it never saw session revocation, sign-out-everywhere or org
+      // removal, since WorkOS has no deactivated user state for it to read.
+      // What makes dropping it safe is downstream: the tools that reach
+      // LlamaCloud forward this caller's own bearer, and the API introspects it
+      // against WorkOS userinfo — cached up to 5 minutes per token, so a
+      // revocation is caught within that window rather than instantly. Keep
+      // that property: a tool that authenticated with a service credential
+      // instead would leave nothing re-checking the caller at all.
+      request.headers.set('x-user-id', payload.sub);
       const limiterResponse = await applyRateLimit(request);
 
       logger.debug('Token validated and ready to get passed through');
@@ -127,7 +136,7 @@ export function buildMcpRouteHandler(
         clientId: clientId!,
         scopes: [],
         extra: {
-          user,
+          user: { id: payload.sub },
           claims: payload,
           rateLimit: extractRateLimitFromResponse(limiterResponse),
         } satisfies WorkOSAuthInfo,

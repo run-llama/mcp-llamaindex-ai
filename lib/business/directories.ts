@@ -1,5 +1,4 @@
-import LlamaCloud from '@llamaindex/llama-cloud';
-import { llamaCloudBaseUrl } from '../region';
+import { llamaCloudClient as client } from './client';
 
 export type DirectoryType = 'user' | 'index' | 'ephemeral';
 
@@ -54,13 +53,6 @@ export interface AddFilesResult {
   directoryId: string;
   added: AddedFile[];
   failed: FailedFile[];
-}
-
-function client(authToken: string): LlamaCloud {
-  return new LlamaCloud({
-    apiKey: authToken,
-    baseURL: llamaCloudBaseUrl(),
-  });
 }
 
 /**
