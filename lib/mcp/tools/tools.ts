@@ -2,8 +2,10 @@ import { ensureUserAuthenticated } from '@/lib/auth/helpers';
 import { publicBaseUrl } from '@/lib/urls';
 import {
   classifyFile,
+  createIndex,
   extract,
   generateExtractSchema,
+  getIndexStatus,
   getProjects,
   grepFileFromIndex,
   listIndexes,
@@ -12,8 +14,15 @@ import {
   retrieveFromIndex,
   searchFilesFromIndex,
   splitFile,
+  syncIndex,
   uploadFile,
 } from '@/lib/business/llamaparse';
+import {
+  addFilesToDirectory,
+  createDirectory,
+  listDirectories,
+  listDirectory,
+} from '@/lib/business/directories';
 import { Category, SplitCategory } from '@/lib/business/types';
 import {
   fileExtension,
@@ -61,6 +70,28 @@ function checkRateLimitedResponse(
     }
   }
   return null;
+}
+
+type ToolTextResponse = {
+  content: { type: 'text'; text: string }[];
+};
+
+/**
+ * Render a tool result as JSON.
+ *
+ * The write tools all emit identifiers that must round-trip verbatim into a
+ * later call, so they return JSON rather than the prose format used by the
+ * older read tools.
+ */
+function jsonResult(value: unknown): ToolTextResponse {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(value, null, 2),
+      },
+    ],
+  };
 }
 
 // =====================
@@ -244,7 +275,7 @@ export function registerUploadFileByUrlTool(server: McpServer) {
 export function registerGetUserProjectsTool(server: McpServer) {
   server.tool(
     'getUserProjects',
-    'Get all the project IDs associated to a user so that you can use them to call tools from different project IDs',
+    'List the projects available to the user, with their names, so you can pass the right projectId to other tools. Use this whenever a tool needs a projectId and the correct project is not already known — pick by name, and ask the user if the name is ambiguous.',
     {},
     async (_args, extra) => {
       return tracer.startActiveSpan('tool.getUserProjects', async (span) => {
@@ -259,16 +290,7 @@ export function registerGetUserProjectsTool(server: McpServer) {
             `Successfully obtained ${result.length} projects for the user`
           );
           span.end();
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Project IDs: ${result.join(', ')}`,
-              },
-            ],
-          } as {
-            content: { type: 'text'; text: string }[];
-          };
+          return jsonResult({ projects: result });
         } catch (err) {
           logger.error(`An error occurred while getting projects: ${err}`);
           span.setAttribute('tool.error', true);
@@ -1218,6 +1240,414 @@ export function registerRetrieveFromIndexTool(
 }
 
 // =====================
+// Directory tools
+// =====================
+
+export function registerCreateDirectoryTool(server: McpServer) {
+  server.tool(
+    'createDirectory',
+    'Create a directory (folder) to hold source documents. A directory is what an index is built over: upload files, add them to a directory with addFilesToDirectory, then call createIndex on it.',
+    {
+      name: z.string().min(1).describe('Name for the new directory'),
+      projectId: z
+        .string()
+        .describe(
+          'Project ID to create the directory in. Required — call getUserProjects to list the available projects and ask the user which one to use if it is not obvious.'
+        ),
+      description: z
+        .string()
+        .optional()
+        .describe('Optional description for the directory'),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.createDirectory', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await createDirectory({
+            authToken: authInfo!.token,
+            name: args.name,
+            projectId: args.projectId,
+            description: args.description ?? null,
+          });
+          logger.info(`Created directory ${redactFileId(result.directoryId)}`);
+          span.end();
+          return jsonResult(result);
+        } catch (err) {
+          logger.error(`An error occurred while creating a directory: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerListDirectoriesTool(server: McpServer) {
+  server.tool(
+    'listDirectories',
+    'List the directories in a project. Returns one page at a time — pass the returned nextPageToken to fetch more. By default only user directories are listed; indexes create their own internal output directories, which are not valid sources for a new index.',
+    {
+      name: z.string().optional().describe('Exact directory name to filter by'),
+      type: z
+        .enum(['user', 'index', 'ephemeral'])
+        .optional()
+        .describe(
+          "Directory type to list. Defaults to 'user'. Only pass 'index' or 'ephemeral' if you specifically need internal directories."
+        ),
+      pageSize: z
+        .number()
+        .optional()
+        .describe('Maximum number of directories to return per page'),
+      pageToken: z
+        .string()
+        .optional()
+        .describe('Token from a previous response to retrieve the next page'),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.listDirectories', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await listDirectories({
+            authToken: authInfo!.token,
+            projectId: args.projectId ?? null,
+            name: args.name ?? null,
+            type: args.type ?? 'user',
+            pageSize: args.pageSize ?? null,
+            pageToken: args.pageToken ?? null,
+          });
+          logger.info(`Listed ${result.directories.length} directories`);
+          span.end();
+          return jsonResult(result);
+        } catch (err) {
+          logger.error(`An error occurred while listing directories: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerListDirectoryTool(server: McpServer) {
+  server.tool(
+    'listDirectory',
+    'List the files inside a directory, along with the directory itself. Returns one page at a time — pass the returned nextPageToken to fetch more. Use directoryFileId, not fileId, when referring to a file in later calls.',
+    {
+      directoryId: z
+        .string()
+        .describe(
+          'ID of the directory to list, as returned by listDirectories'
+        ),
+      displayNameContains: z
+        .string()
+        .optional()
+        .describe('Substring match on the file name (case-insensitive)'),
+      pageSize: z
+        .number()
+        .optional()
+        .describe('Maximum number of files to return per page'),
+      pageToken: z
+        .string()
+        .optional()
+        .describe('Token from a previous response to retrieve the next page'),
+      includeDownloadUrls: z
+        .boolean()
+        .optional()
+        .describe(
+          'Include a temporary download URL for each file. Defaults to false; only enable it if you need to fetch the file contents.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.listDirectory', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute('tool.directory_id', redactFileId(args.directoryId));
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await listDirectory({
+            authToken: authInfo!.token,
+            directoryId: args.directoryId,
+            projectId: args.projectId ?? null,
+            displayNameContains: args.displayNameContains ?? null,
+            pageSize: args.pageSize ?? null,
+            pageToken: args.pageToken ?? null,
+            includeDownloadUrls: args.includeDownloadUrls ?? false,
+          });
+          logger.info(`Listed ${result.files.length} directory files`);
+          span.end();
+          return jsonResult(result);
+        } catch (err) {
+          logger.error(`An error occurred while listing a directory: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerAddFilesToDirectoryTool(server: McpServer) {
+  server.tool(
+    'addFilesToDirectory',
+    'Add already-uploaded files to a directory, so they can be indexed. Takes file IDs from getUploadUrl or uploadFileByUrl. Files are added one by one, so the response reports which succeeded and which failed — retry only the failed ones. If the directory already backs an index, call syncIndex afterwards to pull the new files in.',
+    {
+      directoryId: z
+        .string()
+        .describe('ID of the directory to add the files to'),
+      fileIds: z
+        .array(z.string())
+        .min(1)
+        .describe(
+          'IDs of the files to add, as returned by getUploadUrl or uploadFileByUrl'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.addFilesToDirectory',
+        async (span) => {
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          span.setAttribute(
+            'tool.directory_id',
+            redactFileId(args.directoryId)
+          );
+          span.setAttribute('tool.file_count', args.fileIds.length);
+          const logger = getLogger();
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
+          try {
+            const result = await addFilesToDirectory({
+              authToken: authInfo!.token,
+              directoryId: args.directoryId,
+              fileIds: args.fileIds,
+              projectId: args.projectId ?? null,
+            });
+            logger.info(
+              `Added ${result.added.length} files to directory, ${result.failed.length} failed`
+            );
+            if (result.failed.length > 0) {
+              span.setAttribute('tool.partial_failure', true);
+            }
+            span.end();
+            return jsonResult(result);
+          } catch (err) {
+            logger.error(
+              `An error occurred while adding files to a directory: ${err}`
+            );
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
+        }
+      );
+    }
+  );
+}
+
+// =====================
+// Index write tools
+// =====================
+
+export function registerCreateIndexTool(server: McpServer) {
+  server.tool(
+    'createIndex',
+    'Create an index over a directory, making its documents searchable with retrieveFromIndex and the other index tools. The directory must already contain the files you want indexed — upload them and call addFilesToDirectory first. Indexing runs in the background: the returned index is not queryable until getIndexStatus reports it ready.',
+    {
+      sourceDirectoryId: z
+        .string()
+        .describe(
+          'ID of the directory holding the documents to index, as returned by createDirectory or listDirectories'
+        ),
+      name: z
+        .string()
+        .optional()
+        .describe(
+          'Name for the index. Defaults to the source directory name if omitted.'
+        ),
+      description: z
+        .string()
+        .optional()
+        .describe(
+          'Description of what the index contains. Shown by listIndexes, so it is worth setting — it is how an agent later decides whether this index answers a question.'
+        ),
+      storeAttachments: z
+        .array(z.enum(['screenshots', 'items']))
+        .optional()
+        .describe(
+          "Extra artifacts to store per page. 'screenshots' keeps rendered page images; 'items' keeps structured items with bounding boxes. Defaults to ['screenshots']."
+        ),
+      parseConfigId: z
+        .string()
+        .optional()
+        .describe(
+          'Parse configuration to use. Omit to let the platform create a default one.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.createIndex', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute(
+          'tool.source_directory_id',
+          redactFileId(args.sourceDirectoryId)
+        );
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await createIndex({
+            authToken: authInfo!.token,
+            sourceDirectoryId: args.sourceDirectoryId,
+            projectId: args.projectId ?? null,
+            name: args.name ?? null,
+            description: args.description ?? null,
+            storeAttachments: args.storeAttachments ?? ['screenshots'],
+            parseConfigId: args.parseConfigId ?? null,
+          });
+          logger.info(`Created index ${redactFileId(result.indexId)}`);
+          span.end();
+          return jsonResult({
+            ...result,
+            message:
+              'Initial sync started. Poll getIndexStatus until status is ready before querying the index.',
+          });
+        } catch (err) {
+          logger.error(`An error occurred while creating an index: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerGetIndexStatusTool(server: McpServer) {
+  server.tool(
+    'getIndexStatus',
+    "Check whether an index has finished building. Indexing is asynchronous, so an index created or synced moments ago will not return results yet. Poll this until status is 'ready'; 'failed' means the build did not complete. Querying an index that is not ready looks identical to an index with no matching documents.",
+    {
+      indexId: z
+        .string()
+        .describe('Index ID, as returned by createIndex or listIndexes'),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.getIndexStatus', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute('tool.index_id', redactFileId(args.indexId));
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await getIndexStatus({
+            authToken: authInfo!.token,
+            indexId: args.indexId,
+            projectId: args.projectId ?? null,
+          });
+          logger.info(`Fetched index status`);
+          span.end();
+          return jsonResult(result);
+        } catch (err) {
+          logger.error(
+            `An error occurred while getting the index status: ${err}`
+          );
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerSyncIndexTool(server: McpServer) {
+  server.tool(
+    'syncIndex',
+    'Re-index a directory, picking up files added or changed since the last run. Indexes do not refresh on their own, so this is the only way an existing index sees new documents. Runs in the background — poll getIndexStatus until status is ready. If a sync is already running, this returns syncStarted=false (the underlying API responds 409 or 429): do not retry syncIndex, call getIndexStatus to check the running sync and wait until status is ready.',
+    {
+      indexId: z
+        .string()
+        .describe('Index ID, as returned by createIndex or listIndexes'),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.syncIndex', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        span.setAttribute('tool.index_id', redactFileId(args.indexId));
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await syncIndex({
+            authToken: authInfo!.token,
+            indexId: args.indexId,
+            projectId: args.projectId ?? null,
+          });
+          logger.info(`Sync requested: started=${result.syncStarted}`);
+          span.end();
+          return jsonResult(result);
+        } catch (err) {
+          logger.error(`An error occurred while syncing the index: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+// =====================
 // Aggregate registration (backwards-compatible: all tools)
 // =====================
 
@@ -1235,6 +1665,13 @@ export function registerLlamaParseTools(server: McpServer) {
   registerReadFileFromIndexTool(server);
   registerGrepFileFromIndexTool(server);
   registerRetrieveFromIndexTool(server);
+  registerCreateDirectoryTool(server);
+  registerListDirectoriesTool(server);
+  registerListDirectoryTool(server);
+  registerAddFilesToDirectoryTool(server);
+  registerCreateIndexTool(server);
+  registerGetIndexStatusTool(server);
+  registerSyncIndexTool(server);
   registerLitParseTool(server);
   registerLitIsComplexTool(server);
 }
