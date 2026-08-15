@@ -116,6 +116,13 @@ export function registerGetUploadUrlTool(server: McpServer) {
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
+    {
+      title: 'Get Upload URL',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.getUploadUrl', async (span) => {
         const logger = getLogger();
@@ -204,6 +211,13 @@ export function registerUploadFileByUrlTool(server: McpServer) {
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
+    {
+      title: 'Upload File by URL',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.uploadFileByUrl', async (span) => {
         span.setAttribute('tool.file_ext', fileExtension(args.fileName));
@@ -277,6 +291,11 @@ export function registerGetUserProjectsTool(server: McpServer) {
     'getUserProjects',
     'List the projects available to the user, with their names, so you can pass the right projectId to other tools. Use this whenever a tool needs a projectId and the correct project is not already known — pick by name, and ask the user if the name is ambiguous.',
     {},
+    {
+      title: 'List Projects',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (_args, extra) => {
       return tracer.startActiveSpan('tool.getUserProjects', async (span) => {
         const { authInfo } = extra;
@@ -342,6 +361,13 @@ export function registerParseFileTool(server: McpServer) {
         .describe(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
+    },
+    {
+      title: 'Parse File',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.parseFile', async (span) => {
@@ -414,6 +440,11 @@ export function registerLitParseTool(server: McpServer) {
           'Whether to include the JSON array of pages (with bboxes) in the parse result'
         ),
     },
+    {
+      title: 'Parse File with LiteParse',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.parseWithLiteParse', async (span) => {
         span.setAttribute('tool.file_id', redactFileId(args.fileId));
@@ -478,6 +509,11 @@ export function registerLitIsComplexTool(server: McpServer) {
         .describe(
           'Whether or not to include layout signals in the complexity estimation. Defaults to false.'
         ),
+    },
+    {
+      title: 'Estimate File Complexity',
+      readOnlyHint: true,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan(
@@ -562,48 +598,63 @@ export function registerClassifyFileTool(
   const description = fixedConfigurationId
     ? `Classify a file using the saved classify configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories are pulled from the saved configuration.`
     : 'Classify a file (based on specific categories) providing its file ID. Use with file IDs obtained with the getUploadUrl/uploadFileByUrl tool or that the user provided';
-  server.tool('classifyFile', description, schema, async (args, extra) => {
-    return tracer.startActiveSpan('tool.classifyFile', async (span) => {
-      span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
-      if (args.mode) span.setAttribute('tool.mode', args.mode as string);
-      if (fixedConfigurationId)
-        span.setAttribute('tool.config_id', redactFileId(fixedConfigurationId));
-      const { authInfo } = extra;
-      ensureUserAuthenticated(authInfo);
-      const logger = getLogger();
-      const rl = checkRateLimitedResponse(authInfo, span);
-      if (rl) return rl;
-      try {
-        const result = await classifyFile({
-          authToken: authInfo!.token,
-          fileId: args.fileId as string,
-          mode: args.mode as 'FAST' | undefined,
-          categories: args.categories as never,
-          projectId: args.projectId as string | undefined,
-          configurationId: fixedConfigurationId,
-        });
-        logger.info(
-          `Successfully classified ${redactFileId(args.fileId as string)}`
-        );
-        span.end();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: result.asString(),
-            },
-          ],
-        } as {
-          content: { type: 'text'; text: string }[];
-        };
-      } catch (err) {
-        logger.error(`An error occurred while classifying: ${err}`);
-        span.setAttribute('tool.error', true);
-        span.end();
-        throw err;
-      }
-    });
-  });
+  server.tool(
+    'classifyFile',
+    description,
+    schema,
+    {
+      title: 'Classify File',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.classifyFile', async (span) => {
+        span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+        if (args.mode) span.setAttribute('tool.mode', args.mode as string);
+        if (fixedConfigurationId)
+          span.setAttribute(
+            'tool.config_id',
+            redactFileId(fixedConfigurationId)
+          );
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await classifyFile({
+            authToken: authInfo!.token,
+            fileId: args.fileId as string,
+            mode: args.mode as 'FAST' | undefined,
+            categories: args.categories as never,
+            projectId: args.projectId as string | undefined,
+            configurationId: fixedConfigurationId,
+          });
+          logger.info(
+            `Successfully classified ${redactFileId(args.fileId as string)}`
+          );
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.asString(),
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while classifying: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
 }
 
 // =====================
@@ -647,56 +698,71 @@ export function registerSplitFileTool(
   const description = fixedConfigurationId
     ? `Split a file into category-based segments using the saved split configuration ${fixedConfigurationId}. Provide the file ID (as returned by the upload tool or supplied by the user); the categories and splitting strategy are pulled from the saved configuration.`
     : 'Split a file into category-based segments providing its file ID. Use with file IDs obtained with the getUploadUrl/uploadFileByUrl tool or that the user provided';
-  server.tool('splitFile', description, schema, async (args, extra) => {
-    return tracer.startActiveSpan('tool.splitFile', async (span) => {
-      span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
-      if (args.allowUncategorized)
-        span.setAttribute(
-          'tool.allow_uncategorized',
-          args.allowUncategorized as string
-        );
-      if (fixedConfigurationId)
-        span.setAttribute('tool.config_id', redactFileId(fixedConfigurationId));
-      const { authInfo } = extra;
-      ensureUserAuthenticated(authInfo);
-      const logger = getLogger();
-      const rl = checkRateLimitedResponse(authInfo, span);
-      if (rl) return rl;
-      try {
-        const result = await splitFile({
-          authToken: authInfo!.token,
-          fileId: args.fileId as string,
-          allowUnacategorized: args.allowUncategorized as
-            | 'omit'
-            | 'include'
-            | 'forbid'
-            | undefined,
-          categories: args.categories as never,
-          projectId: args.projectId as string | undefined,
-          configurationId: fixedConfigurationId,
-        });
-        logger.info(
-          `Successfully split ${redactFileId(args.fileId as string)}`
-        );
-        span.end();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: result.asString(),
-            },
-          ],
-        } as {
-          content: { type: 'text'; text: string }[];
-        };
-      } catch (err) {
-        logger.error(`An error occurred while splitting: ${err}`);
-        span.setAttribute('tool.error', true);
-        span.end();
-        throw err;
-      }
-    });
-  });
+  server.tool(
+    'splitFile',
+    description,
+    schema,
+    {
+      title: 'Split File',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.splitFile', async (span) => {
+        span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+        if (args.allowUncategorized)
+          span.setAttribute(
+            'tool.allow_uncategorized',
+            args.allowUncategorized as string
+          );
+        if (fixedConfigurationId)
+          span.setAttribute(
+            'tool.config_id',
+            redactFileId(fixedConfigurationId)
+          );
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await splitFile({
+            authToken: authInfo!.token,
+            fileId: args.fileId as string,
+            allowUnacategorized: args.allowUncategorized as
+              | 'omit'
+              | 'include'
+              | 'forbid'
+              | undefined,
+            categories: args.categories as never,
+            projectId: args.projectId as string | undefined,
+            configurationId: fixedConfigurationId,
+          });
+          logger.info(
+            `Successfully split ${redactFileId(args.fileId as string)}`
+          );
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.asString(),
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while splitting: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
 }
 
 // =====================
@@ -724,6 +790,13 @@ export function registerGenerateExtractionConfigTool(server: McpServer) {
         .describe(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
+    },
+    {
+      title: 'Generate Extraction Config',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan(
@@ -802,46 +875,58 @@ export function registerExtractFileTool(
   const description = fixedConfigurationId
     ? `Extract structured data from a file using the saved extraction configuration ${fixedConfigurationId}. Returns the extracted structured data.`
     : 'Extract structured data from a file based on the configuration created with the `generateExtractionConfig` tool. Returns the extracted structured data.';
-  server.tool('extractFile', description, schema, async (args, extra) => {
-    return tracer.startActiveSpan('tool.extractFile', async (span) => {
-      const configurationId =
-        fixedConfigurationId ?? (args.configurationId as string);
-      span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
-      span.setAttribute('tool.config_name', redactFileId(configurationId));
-      const { authInfo } = extra;
-      ensureUserAuthenticated(authInfo);
-      const logger = getLogger();
-      const rl = checkRateLimitedResponse(authInfo, span);
-      if (rl) return rl;
-      try {
-        const result = await extract({
-          token: authInfo!.token,
-          fileId: args.fileId as string,
-          projectId: args.projectId as string | undefined,
-          configurationId,
-        });
-        logger.info(
-          `Successfully extracted ${redactFileId(args.fileId as string)}`
-        );
-        span.end();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: result,
-            },
-          ],
-        } as {
-          content: { type: 'text'; text: string }[];
-        };
-      } catch (err) {
-        logger.error(`An error occurred while extracting data: ${err}`);
-        span.setAttribute('tool.error', true);
-        span.end();
-        throw err;
-      }
-    });
-  });
+  server.tool(
+    'extractFile',
+    description,
+    schema,
+    {
+      title: 'Extract Structured Data',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.extractFile', async (span) => {
+        const configurationId =
+          fixedConfigurationId ?? (args.configurationId as string);
+        span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+        span.setAttribute('tool.config_name', redactFileId(configurationId));
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        try {
+          const result = await extract({
+            token: authInfo!.token,
+            fileId: args.fileId as string,
+            projectId: args.projectId as string | undefined,
+            configurationId,
+          });
+          logger.info(
+            `Successfully extracted ${redactFileId(args.fileId as string)}`
+          );
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
+              },
+            ],
+          } as {
+            content: { type: 'text'; text: string }[];
+          };
+        } catch (err) {
+          logger.error(`An error occurred while extracting data: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
 }
 
 // =====================
@@ -862,6 +947,11 @@ export function registerListIndexesTool(server: McpServer) {
         .describe(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
+    },
+    {
+      title: 'List Indexes',
+      readOnlyHint: true,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.listIndexes', async (span) => {
@@ -935,6 +1025,11 @@ export function registerFindFilesInIndexTool(
     'findFilesInIndex',
     'Search files within an index. Optionally provide the file name to filter for or a substring that should be contained in the file name',
     schema,
+    {
+      title: 'Find Files in Index',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan(
         'tool.searchFilesFromIndex',
@@ -1022,6 +1117,11 @@ export function registerReadFileFromIndexTool(
     'readFileFromIndex',
     'Read the content of a file from an index, providing its file ID and, optionally, an offset and a maximum length (in characters) to read.',
     schema,
+    {
+      title: 'Read File from Index',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.readFileFromIndex', async (span) => {
         const { authInfo } = extra;
@@ -1108,6 +1208,11 @@ export function registerGrepFileFromIndexTool(
     'grepFileFromIndex',
     'Grep the content of a file from an index, providing its file ID, the pattern to grep for and, optionally, a number of context characters and a maximum number of grep matches to retrieve',
     schema,
+    {
+      title: 'Grep File in Index',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.grepFileFromIndex', async (span) => {
         const { authInfo } = extra;
@@ -1194,6 +1299,11 @@ export function registerRetrieveFromIndexTool(
     'retrieveFromIndex',
     'Perform hybrid search on the index, providing a query and, optionally, the top K documents to retrieve and the top N documents to rerank',
     schema,
+    {
+      title: 'Search Index',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.retrieveFromIndex', async (span) => {
         const { authInfo } = extra;
@@ -1259,6 +1369,13 @@ export function registerCreateDirectoryTool(server: McpServer) {
         .optional()
         .describe('Optional description for the directory'),
     },
+    {
+      title: 'Create Directory',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.createDirectory', async (span) => {
         const { authInfo } = extra;
@@ -1313,6 +1430,11 @@ export function registerListDirectoriesTool(server: McpServer) {
         .describe(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
+    },
+    {
+      title: 'List Directories',
+      readOnlyHint: true,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.listDirectories', async (span) => {
@@ -1379,6 +1501,11 @@ export function registerListDirectoryTool(server: McpServer) {
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
+    {
+      title: 'List Directory Contents',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.listDirectory', async (span) => {
         const { authInfo } = extra;
@@ -1431,6 +1558,13 @@ export function registerAddFilesToDirectoryTool(server: McpServer) {
         .describe(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
+    },
+    {
+      title: 'Add Files to Directory',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan(
@@ -1520,6 +1654,13 @@ export function registerCreateIndexTool(server: McpServer) {
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
+    {
+      title: 'Create Index',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.createIndex', async (span) => {
         const { authInfo } = extra;
@@ -1574,6 +1715,11 @@ export function registerGetIndexStatusTool(server: McpServer) {
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
     },
+    {
+      title: 'Get Index Status',
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.getIndexStatus', async (span) => {
         const { authInfo } = extra;
@@ -1618,6 +1764,13 @@ export function registerSyncIndexTool(server: McpServer) {
         .describe(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
+    },
+    {
+      title: 'Sync Index',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
     },
     async (args, extra) => {
       return tracer.startActiveSpan('tool.syncIndex', async (span) => {
