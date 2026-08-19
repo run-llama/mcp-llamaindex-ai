@@ -5,7 +5,10 @@ import {
   SplitCategoryType,
   SplitResult,
 } from './types';
-import { RetrievalGrepResponse } from '@llamaindex/llama-cloud/resources/beta.js';
+import {
+  RetrievalGrepResponse,
+  RetrievalRetrieveResponse,
+} from '@llamaindex/llama-cloud/resources/beta.js';
 import { APIError } from '@llamaindex/llama-cloud';
 import { llamaCloudClient } from './client';
 
@@ -338,7 +341,7 @@ export async function listIndexes({
   const indexes: { name: string; indexId: string; description: string }[] = [];
   while (true) {
     const response = await client.beta.indexes.list({
-      project_id: projectId,
+      project_id: projectId ?? undefined,
       page_token: pageToken,
     });
     const idxs = response.items.map((i) => {
@@ -508,7 +511,7 @@ export async function searchFilesFromIndex({
   const files: { name: string; fileId: string }[] = [];
   while (true) {
     const response = await client.beta.retrieval.find({
-      project_id: projectId,
+      project_id: projectId ?? undefined,
       file_name: fileName,
       file_name_contains: fileNameContains,
       index_id: indexId,
@@ -550,7 +553,7 @@ export async function readFileFromIndex({
 }) {
   const client = llamaCloudClient(authToken);
   const response = await client.beta.retrieval.read({
-    project_id: projectId,
+    project_id: projectId ?? undefined,
     file_id: fileId,
     index_id: indexId,
     offset: offset ?? 0,
@@ -581,7 +584,7 @@ export async function grepFileFromIndex({
   let pageToken: string | undefined = undefined;
   while (true) {
     const response = await client.beta.retrieval.grep({
-      project_id: projectId,
+      project_id: projectId ?? undefined,
       file_id: fileId,
       index_id: indexId,
       pattern: pattern,
@@ -602,6 +605,74 @@ export async function grepFileFromIndex({
   return s;
 }
 
+type RetrievalResults = RetrievalRetrieveResponse['results'];
+
+/**
+ * Retrieved chunks are document text, so `<` and `&` occur naturally and would
+ * otherwise break the envelope they are wrapped in.
+ */
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function attr(name: string, value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '';
+  return ` ${name}="${escapeXml(String(value))}"`;
+}
+
+/**
+ * Renders results as XML rather than concatenated prose. The previous format
+ * ran chunks together with no delimiter, and surfaced only user-defined
+ * `metadata` — dropping `static_fields`, which is where the source file and
+ * page numbers live, so results carried no provenance.
+ *
+ * Relevance scores are deliberately omitted: they are hybrid-fusion values
+ * whose scale is not interpretable on its own, and readers consistently
+ * mistook small numbers for poor matches.
+ *
+ * Chunk content is returned whole. An earlier version cut it at 500 characters,
+ * which silently discarded the tail of every long chunk — the caller asked for
+ * these passages, and deciding how much of a response to keep belongs to the
+ * agent harness, not here. Callers wanting less should lower `top_k`.
+ */
+export function formatRetrievalResults(results: RetrievalResults): string {
+  if (results.length === 0) {
+    return '<results count="0" />';
+  }
+
+  const rendered = results.map((r, i) => {
+    const s = r.static_fields ?? {};
+    const start = s.page_range_start;
+    const end = s.page_range_end;
+    const pages =
+      start === null || start === undefined
+        ? undefined
+        : end === null || end === undefined || end === start
+          ? String(start)
+          : `${start}-${end}`;
+
+    const open =
+      `<result n="${i + 1}"` +
+      attr('file_id', s.parsed_directory_file_id) +
+      attr('pages', pages) +
+      attr('chunk_index', s.chunk_index) +
+      '>';
+
+    const metadata =
+      r.metadata && Object.keys(r.metadata).length > 0
+        ? `\n  <metadata>${escapeXml(JSON.stringify(r.metadata))}</metadata>`
+        : '';
+
+    return `${open}\n  <content>${escapeXml(r.content)}</content>${metadata}\n</result>`;
+  });
+
+  return `<results count="${results.length}">\n${rendered.join('\n')}\n</results>`;
+}
+
 export async function retrieveFromIndex({
   authToken,
   indexId,
@@ -619,26 +690,14 @@ export async function retrieveFromIndex({
 }) {
   const client = llamaCloudClient(authToken);
   const response = await client.beta.retrieval.retrieve({
-    project_id: projectId,
+    project_id: projectId ?? undefined,
     index_id: indexId,
     query,
     top_k: topK,
-    rerank: rerankTopN
-      ? { enabled: true, top_n: rerankTopN }
-      : { enabled: false },
+    // Omitted rather than disabled when the caller names no top_n: the API
+    // enables reranking by default, and sending `{enabled: false}` here was
+    // silently overriding that with worse results.
+    ...(rerankTopN ? { rerank: { enabled: true, top_n: rerankTopN } } : {}),
   });
-  let retrieved = '';
-  let i = 0;
-  for (const r of response.results) {
-    i += 1;
-    let content = r.content;
-    if (content.length > 500) {
-      content = content.slice(0, 500) + '...';
-    }
-    retrieved += `Match ${i} (retrieval score: ${r.score ?? 'NA'}; reranking score: ${r.rerank_score ?? 'NA'})\n\n${content}`;
-    if (r.metadata) {
-      retrieved += `\n\nMetadata:\n\n\`\`\`json\n${JSON.stringify(r.metadata, undefined, 2)}\n\`\`\``;
-    }
-  }
-  return retrieved;
+  return formatRetrievalResults(response.results);
 }
