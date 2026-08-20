@@ -30,12 +30,12 @@ const RATE_LIMITED = authInfo({
 });
 
 describe('surfaceFromBasePath', () => {
-  // `/index/[indexId]` and `/classify/[configId]` embed caller-controlled ids;
+  // `/classify/[configId]` and its siblings embed caller-controlled ids;
   // recording them verbatim would make the label unbounded.
   it.each([
     ['', 'full', false],
     ['/parse', 'parse', false],
-    ['/index/idx_0199', 'index', true],
+    ['/index', 'index', false],
     ['/classify/cfg_42', 'classify', true],
   ])('labels %p as %p', (basePath, surface, scoped) => {
     expect(surfaceFromBasePath(basePath)).toEqual({ surface, scoped });
