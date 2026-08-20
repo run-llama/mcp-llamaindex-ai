@@ -932,9 +932,6 @@ export function registerExtractFileTool(
 // =====================
 // Index tools
 // =====================
-// All index tools accept an optional `fixedIndexId`. When provided, the
-// registered tool removes `indexId` from its input schema and uses the
-// fixed value (useful for the /index/[indexId]/mcp route).
 
 export function registerListIndexesTool(server: McpServer) {
   server.tool(
@@ -988,10 +985,7 @@ export function registerListIndexesTool(server: McpServer) {
   );
 }
 
-export function registerFindFilesInIndexTool(
-  server: McpServer,
-  fixedIndexId?: string
-) {
+export function registerFindFilesInIndexTool(server: McpServer) {
   const schema: Record<string, z.ZodTypeAny> = {
     fileName: z
       .string()
@@ -1004,23 +998,15 @@ export function registerFindFilesInIndexTool(
         'Substring contained in the file name to search for (recommended using over fileName)'
       ),
   };
-  if (!fixedIndexId) {
-    schema.indexId = z
-      .string()
-      .describe('Index ID, as provided by the listIndexes tool');
-    schema.projectId = z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      );
-  } else {
-    schema.projectId = z
-      .string()
-      .describe(
-        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
-      );
-  }
+  schema.indexId = z
+    .string()
+    .describe('Index ID, as provided by the listIndexes tool');
+  schema.projectId = z
+    .string()
+    .optional()
+    .describe(
+      'Project ID that the tool should use. Uses the default project if not provided.'
+    );
   server.tool(
     'findFilesInIndex',
     'Search files within an index. Optionally provide the file name to filter for or a substring that should be contained in the file name',
@@ -1036,7 +1022,7 @@ export function registerFindFilesInIndexTool(
         async (span) => {
           const { authInfo } = extra;
           ensureUserAuthenticated(authInfo);
-          const indexId = fixedIndexId ?? (args.indexId as string);
+          const indexId = args.indexId as string;
           const projectId = (args.projectId as string | undefined) ?? null;
           span.setAttribute('tool.index_id', redactFileId(indexId));
           const logger = getLogger();
@@ -1075,10 +1061,7 @@ export function registerFindFilesInIndexTool(
   );
 }
 
-export function registerReadFileFromIndexTool(
-  server: McpServer,
-  fixedIndexId?: string
-) {
+export function registerReadFileFromIndexTool(server: McpServer) {
   const schema: Record<string, z.ZodTypeAny> = {
     fileId: z
       .string()
@@ -1096,23 +1079,15 @@ export function registerReadFileFromIndexTool(
         'Maximum length (in characters) to read starting from the offset.'
       ),
   };
-  if (!fixedIndexId) {
-    schema.indexId = z
-      .string()
-      .describe('Index ID, as provided by the listIndexes tool');
-    schema.projectId = z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      );
-  } else {
-    schema.projectId = z
-      .string()
-      .describe(
-        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
-      );
-  }
+  schema.indexId = z
+    .string()
+    .describe('Index ID, as provided by the listIndexes tool');
+  schema.projectId = z
+    .string()
+    .optional()
+    .describe(
+      'Project ID that the tool should use. Uses the default project if not provided.'
+    );
   server.tool(
     'readFileFromIndex',
     'Read the content of a file from an index, providing its file ID and, optionally, an offset and a maximum length (in characters) to read.',
@@ -1126,7 +1101,7 @@ export function registerReadFileFromIndexTool(
       return tracer.startActiveSpan('tool.readFileFromIndex', async (span) => {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        const indexId = fixedIndexId ?? (args.indexId as string);
+        const indexId = args.indexId as string;
         const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
@@ -1165,10 +1140,7 @@ export function registerReadFileFromIndexTool(
   );
 }
 
-export function registerGrepFileFromIndexTool(
-  server: McpServer,
-  fixedIndexId?: string
-) {
+export function registerGrepFileFromIndexTool(server: McpServer) {
   const schema: Record<string, z.ZodTypeAny> = {
     fileId: z
       .string()
@@ -1187,23 +1159,15 @@ export function registerGrepFileFromIndexTool(
       .optional()
       .describe('Maximum number of grep matches to retrieve'),
   };
-  if (!fixedIndexId) {
-    schema.indexId = z
-      .string()
-      .describe('Index ID, as provided by the listIndexes tool');
-    schema.projectId = z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      );
-  } else {
-    schema.projectId = z
-      .string()
-      .describe(
-        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
-      );
-  }
+  schema.indexId = z
+    .string()
+    .describe('Index ID, as provided by the listIndexes tool');
+  schema.projectId = z
+    .string()
+    .optional()
+    .describe(
+      'Project ID that the tool should use. Uses the default project if not provided.'
+    );
   server.tool(
     'grepFileFromIndex',
     'Grep the content of a file from an index, providing its file ID, the pattern to grep for and, optionally, a number of context characters and a maximum number of grep matches to retrieve',
@@ -1217,7 +1181,7 @@ export function registerGrepFileFromIndexTool(
       return tracer.startActiveSpan('tool.grepFileFromIndex', async (span) => {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        const indexId = fixedIndexId ?? (args.indexId as string);
+        const indexId = args.indexId as string;
         const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
@@ -1261,10 +1225,7 @@ export function registerGrepFileFromIndexTool(
   );
 }
 
-export function registerRetrieveFromIndexTool(
-  server: McpServer,
-  fixedIndexId?: string
-) {
+export function registerRetrieveFromIndexTool(server: McpServer) {
   const schema: Record<string, z.ZodTypeAny> = {
     query: z.string().describe('Query to search for'),
     topK: z
@@ -1278,23 +1239,15 @@ export function registerRetrieveFromIndexTool(
         'Top N documents to rerank. If not provided, reranking will be disabled.'
       ),
   };
-  if (!fixedIndexId) {
-    schema.indexId = z
-      .string()
-      .describe('Index ID, as provided by the listIndexes tool');
-    schema.projectId = z
-      .string()
-      .optional()
-      .describe(
-        'Project ID that the tool should use. Uses the default project if not provided.'
-      );
-  } else {
-    schema.projectId = z
-      .string()
-      .describe(
-        'Project ID that the tool should use. Should correspond to the one the index is registered under.'
-      );
-  }
+  schema.indexId = z
+    .string()
+    .describe('Index ID, as provided by the listIndexes tool');
+  schema.projectId = z
+    .string()
+    .optional()
+    .describe(
+      'Project ID that the tool should use. Uses the default project if not provided.'
+    );
   server.tool(
     'retrieveFromIndex',
     'Perform hybrid search on the index, providing a query and, optionally, the top K documents to retrieve and the top N documents to rerank',
@@ -1308,7 +1261,7 @@ export function registerRetrieveFromIndexTool(
       return tracer.startActiveSpan('tool.retrieveFromIndex', async (span) => {
         const { authInfo } = extra;
         ensureUserAuthenticated(authInfo);
-        const indexId = fixedIndexId ?? (args.indexId as string);
+        const indexId = args.indexId as string;
         const projectId = (args.projectId as string | undefined) ?? null;
         span.setAttribute('tool.index_id', redactFileId(indexId));
         span.setAttribute('tool.query_length', (args.query as string).length);
@@ -1801,8 +1754,31 @@ export function registerSyncIndexTool(server: McpServer) {
 }
 
 // =====================
-// Aggregate registration (backwards-compatible: all tools)
+// Aggregate registration
 // =====================
+
+// The Index surface, as served at /index/mcp. The upload helpers are part of
+// it because addFilesToDirectory takes file ids that only getUploadUrl or
+// uploadFileByUrl can mint.
+export function registerIndexTools(server: McpServer) {
+  registerGetUserProjectsTool(server);
+  registerGetUploadUrlTool(server);
+  registerUploadFileByUrlTool(server);
+  registerListIndexesTool(server);
+  registerFindFilesInIndexTool(server);
+  registerReadFileFromIndexTool(server);
+  registerGrepFileFromIndexTool(server);
+  registerRetrieveFromIndexTool(server);
+  registerCreateDirectoryTool(server);
+  registerListDirectoriesTool(server);
+  registerListDirectoryTool(server);
+  registerAddFilesToDirectoryTool(server);
+  registerCreateIndexTool(server);
+  registerGetIndexStatusTool(server);
+  registerSyncIndexTool(server);
+}
+
+// Every tool, as served at /mcp.
 
 export function registerLlamaParseTools(server: McpServer) {
   registerGetUploadUrlTool(server);
