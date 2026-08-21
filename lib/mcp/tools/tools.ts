@@ -16,7 +16,13 @@ import {
   splitFile,
   syncIndex,
   uploadFile,
+  createExtractConfigFromSchema,
 } from '@/lib/business/llamaparse';
+import {
+  getSchemaTemplate,
+  listSchemaTemplateCategories,
+  searchSchemaTemplates,
+} from '@/lib/business/schema-templates';
 import {
   addFilesToDirectory,
   createDirectory,
@@ -930,6 +936,235 @@ export function registerExtractFileTool(
 }
 
 // =====================
+// Schema template tools
+// =====================
+
+export function registerSearchSchemaTemplatesTool(server: McpServer) {
+  server.tool(
+    'searchSchemaTemplates',
+    'Search the built-in library of starter extraction schemas (invoice, contract, resume, 10-K, patient intake and more) by keyword or category. Returns matching templates with their top-level field names, but not the full JSON Schema — call `getSchemaTemplate` for that. Prefer this over `generateExtractionConfig` when the user wants a common document type: it is instant and needs no sample file.',
+    {
+      query: z
+        .string()
+        .optional()
+        .describe(
+          'Keywords to match against template names, descriptions, categories and field names, e.g. "invoice", "legal agreement", "line_items". Omit to list everything.'
+        ),
+      category: z
+        .string()
+        .optional()
+        .describe(
+          'Restrict to one category. Allowed values: business, legal, healthcare, finance_research, education.'
+        ),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Maximum number of templates to return. Defaults to 10.'),
+    },
+    {
+      title: 'Search Schema Templates',
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.searchSchemaTemplates',
+        async (span) => {
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          const results = searchSchemaTemplates({
+            query: args.query as string | undefined,
+            category: args.category as string | undefined,
+            limit: args.limit as number | undefined,
+          });
+          span.setAttribute('tool.result_count', results.length);
+          span.end();
+          return jsonResult({
+            templates: results,
+            categories: listSchemaTemplateCategories(),
+            next: 'Call getSchemaTemplate with a template id to retrieve its full JSON Schema.',
+          });
+        }
+      );
+    }
+  );
+}
+
+export function registerGetSchemaTemplateTool(server: McpServer) {
+  server.tool(
+    'getSchemaTemplate',
+    'Retrieve the full JSON Schema for one starter extraction template, by id, as returned by `searchSchemaTemplates`. Pass the schema to `createExtractionConfigFromSchema` — edit it first if the user needs extra or fewer fields.',
+    {
+      templateId: z
+        .string()
+        .describe(
+          'ID of the template, as returned by `searchSchemaTemplates`, e.g. "invoice" or "ten_k".'
+        ),
+    },
+    {
+      title: 'Get Schema Template',
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.getSchemaTemplate', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const templateId = args.templateId as string;
+        span.setAttribute('tool.template_id', templateId);
+        const template = getSchemaTemplate(templateId);
+        if (!template) {
+          const known = searchSchemaTemplates({ limit: 100 }).map((t) => t.id);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw new Error(
+            `No schema template with id '${templateId}'. Known ids: ${known.join(', ')}.`
+          );
+        }
+        span.end();
+        return jsonResult(template);
+      });
+    }
+  );
+}
+
+export function registerCreateExtractionConfigFromSchemaTool(
+  server: McpServer
+) {
+  server.tool(
+    'createExtractionConfigFromSchema',
+    'Create an extraction configuration from a JSON Schema you already have, and return its configuration id for use with `extractFile`. Supply either a `templateId` from `searchSchemaTemplates` (the server loads the schema for you) or an explicit `dataSchema` — a schema you wrote, or a template schema you edited. Unlike `generateExtractionConfig`, this needs no sample file and involves no LLM step.',
+    {
+      templateId: z
+        .string()
+        .optional()
+        .describe(
+          'ID of a starter template to use verbatim, as returned by `searchSchemaTemplates`. Provide this or `dataSchema`, not both.'
+        ),
+      dataSchema: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe(
+          'An explicit JSON Schema object describing the fields to extract. Must be an object schema with a `properties` map. Provide this or `templateId`, not both.'
+        ),
+      name: z
+        .string()
+        .optional()
+        .describe(
+          'Human-readable name for the configuration. Defaults to the template title, or "extraction-config" for an explicit schema.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+      tier: z
+        .enum(['cost_effective', 'agentic'])
+        .optional()
+        .describe(
+          'Extraction quality tier. Defaults to cost_effective; use agentic for complex or ambiguous documents.'
+        ),
+      extractionTarget: z
+        .enum(['per_doc', 'per_page', 'per_table_row'])
+        .optional()
+        .describe(
+          'Whether to produce one object per document (default), per page, or per table row.'
+        ),
+    },
+    {
+      title: 'Create Extraction Config From Schema',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.createExtractionConfigFromSchema',
+        async (span) => {
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          const logger = getLogger();
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
+
+          const templateId = args.templateId as string | undefined;
+          const explicitSchema = args.dataSchema as
+            | Record<string, unknown>
+            | undefined;
+          if (!templateId && !explicitSchema) {
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw new Error(
+              'Provide either templateId or dataSchema. Use searchSchemaTemplates to find a template id.'
+            );
+          }
+          if (templateId && explicitSchema) {
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw new Error(
+              'Provide only one of templateId or dataSchema. To adapt a template, fetch it with getSchemaTemplate, edit it, and pass the result as dataSchema.'
+            );
+          }
+
+          let dataSchema: Record<string, unknown>;
+          let defaultName: string;
+          if (templateId) {
+            const template = getSchemaTemplate(templateId);
+            if (!template) {
+              span.setAttribute('tool.error', true);
+              span.end();
+              throw new Error(
+                `No schema template with id '${templateId}'. Use searchSchemaTemplates to list the available ids.`
+              );
+            }
+            dataSchema = template.schema;
+            defaultName = template.title;
+            span.setAttribute('tool.template_id', templateId);
+          } else {
+            dataSchema = explicitSchema!;
+            defaultName = 'extraction-config';
+          }
+
+          try {
+            const configurationId = await createExtractConfigFromSchema({
+              token: authInfo!.token,
+              projectId: args.projectId as string | undefined,
+              name: (args.name as string | undefined) ?? defaultName,
+              dataSchema,
+              tier: args.tier as undefined | 'cost_effective' | 'agentic',
+              extractionTarget: args.extractionTarget as
+                | undefined
+                | 'per_doc'
+                | 'per_page'
+                | 'per_table_row',
+            });
+            logger.info(
+              `Created extraction configuration from ${templateId ? `template ${templateId}` : 'an explicit schema'}`
+            );
+            span.end();
+            return jsonResult({
+              configurationId,
+              next: 'Pass this configurationId to extractFile along with a fileId.',
+            });
+          } catch (err) {
+            logger.error(
+              `An error occurred while creating an extraction config: ${err}`
+            );
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
+        }
+      );
+    }
+  );
+}
+
+// =====================
 // Index tools
 // =====================
 
@@ -1787,6 +2022,9 @@ export function registerLlamaParseTools(server: McpServer) {
   registerParseFileTool(server);
   registerClassifyFileTool(server);
   registerSplitFileTool(server);
+  registerSearchSchemaTemplatesTool(server);
+  registerGetSchemaTemplateTool(server);
+  registerCreateExtractionConfigFromSchemaTool(server);
   registerGenerateExtractionConfigTool(server);
   registerExtractFileTool(server);
   registerListIndexesTool(server);

@@ -10,6 +10,7 @@ import {
   RetrievalRetrieveResponse,
 } from '@llamaindex/llama-cloud/resources/beta.js';
 import { APIError } from '@llamaindex/llama-cloud';
+import { ExtractV2Parameters } from '@llamaindex/llama-cloud/resources/configurations.js';
 import { llamaCloudClient } from './client';
 
 const MaximumWaitingTime: number = 1800 * 1000;
@@ -287,6 +288,42 @@ export async function generateExtractSchema({
   } else {
     throw new Error('Could not generate a schema');
   }
+}
+
+/**
+ * Create an extraction configuration from a JSON Schema the caller already has
+ * — a vendored starter template, or a schema they wrote themselves. This is the
+ * deterministic counterpart to `generateExtractSchema`: no file, no LLM, no
+ * round-trip, so a CLI agent can go from "invoice template" to a usable
+ * configuration id in one call.
+ */
+export async function createExtractConfigFromSchema({
+  token,
+  projectId = undefined,
+  name,
+  dataSchema,
+  tier = undefined,
+  extractionTarget = undefined,
+}: {
+  token: string;
+  projectId?: string | undefined;
+  name: string;
+  dataSchema: Record<string, unknown>;
+  tier?: undefined | 'cost_effective' | 'agentic';
+  extractionTarget?: undefined | 'per_doc' | 'per_page' | 'per_table_row';
+}): Promise<string> {
+  const client = llamaCloudClient(token);
+  const response = await client.configurations.create({
+    name,
+    project_id: projectId,
+    parameters: {
+      product_type: 'extract_v2',
+      data_schema: dataSchema as ExtractV2Parameters['data_schema'],
+      ...(tier ? { tier } : {}),
+      ...(extractionTarget ? { extraction_target: extractionTarget } : {}),
+    },
+  });
+  return response.id;
 }
 
 export async function extract({

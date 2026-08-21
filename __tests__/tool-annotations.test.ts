@@ -8,13 +8,16 @@ jest.mock('@llamaindex/liteparse-wasm', () => ({}), { virtual: true });
 
 import { registerLlamaParseTools } from '../lib/mcp/tools/tools';
 
-// Tools that only read. The LiteParse-backed tools qualify because they run
-// in-process and consume no platform credits; the billable processing tools
-// (parseFile, classifyFile, splitFile, extractFile, generateExtractionConfig)
+// Tools that only read. The LiteParse-backed and schema-template tools qualify
+// because they run in-process and consume no platform credits; the billable
+// processing tools (parseFile, classifyFile, splitFile, extractFile,
+// generateExtractionConfig)
 // deliberately do not, since a credit deduction is a real and irreversible
 // change even though the parsed output expires after 48 hours.
 const READ_ONLY = [
   'getUserProjects',
+  'searchSchemaTemplates',
+  'getSchemaTemplate',
   'parseWithLiteParse',
   'estimateFileComplexity',
   'listIndexes',
@@ -36,6 +39,7 @@ const WRITES = [
   'classifyFile',
   'splitFile',
   'generateExtractionConfig',
+  'createExtractionConfigFromSchema',
   'extractFile',
   'createDirectory',
   'addFilesToDirectory',
@@ -96,11 +100,16 @@ describe('tool annotations', () => {
     }
   );
 
-  it('reaches an external service on every tool', async () => {
+  // The schema-template tools answer from a fixed catalog vendored into this
+  // repo — no network, no account state, same answer every time — so they are
+  // the only closed-world tools. Everything else reaches LlamaCloud, or (for
+  // the LiteParse tools) fetches the user's document, and is open-world.
+  it('marks every tool open-world except the local schema catalog', async () => {
     const tools = await listTools();
-    const notOpenWorld = tools.filter(
-      (t) => t.annotations?.openWorldHint !== true
-    );
-    expect(notOpenWorld.map((t) => t.name)).toEqual([]);
+    const closedWorld = tools
+      .filter((t) => t.annotations?.openWorldHint !== true)
+      .map((t) => t.name)
+      .sort();
+    expect(closedWorld).toEqual(['getSchemaTemplate', 'searchSchemaTemplates']);
   });
 });
