@@ -72,6 +72,17 @@ export function listSchemaTemplateCategories(): SchemaTemplateCategory[] {
   return CATEGORIES.map((c) => ({ ...c }));
 }
 
+/**
+ * The schema's own one-line summary, which is often phrased differently from
+ * the gallery blurb — the Contract template is "Parties, dates, governing law"
+ * on the card but "Key terms extracted from a contract or agreement" here, and
+ * only the latter contains the word a caller is likely to type.
+ */
+function schemaDescription(schema: Record<string, unknown>): string {
+  const description = schema.description;
+  return typeof description === 'string' ? description : '';
+}
+
 function topLevelFields(schema: Record<string, unknown>): string[] {
   const properties = schema.properties;
   if (!properties || typeof properties !== 'object') return [];
@@ -91,16 +102,24 @@ export function getSchemaTemplate(id: string): SchemaTemplate | undefined {
 /**
  * Relevance for one query term. Weights follow how a caller phrases a request:
  * they name the document ("invoice"), then the domain ("legal"), and only then
- * a field they need ("line_items"). 0 means the term is absent, and every term
- * must hit somewhere for the template to match at all.
+ * something inside it — a field they need ("line_items") or a word that only
+ * appears in the schema's own summary ("agreement"). 0 means the term is
+ * absent, and every term must hit somewhere for the template to match at all,
+ * so the weakest tier is what keeps a phrase like "legal agreement" from
+ * matching nothing.
  */
 function scoreTerm(template: SchemaTemplate, term: string): number {
-  const fields = topLevelFields(template.schema).join(' ').toLowerCase();
   if (template.title.toLowerCase().includes(term)) return 8;
   if (template.id.toLowerCase().includes(term)) return 6;
   if (template.categoryLabel.toLowerCase().includes(term)) return 4;
   if (template.description.toLowerCase().includes(term)) return 3;
-  if (fields.includes(term)) return 2;
+  const inner = [
+    ...topLevelFields(template.schema),
+    schemaDescription(template.schema),
+  ]
+    .join(' ')
+    .toLowerCase();
+  if (inner.includes(term)) return 2;
   return 0;
 }
 

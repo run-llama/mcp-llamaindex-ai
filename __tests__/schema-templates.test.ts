@@ -52,6 +52,26 @@ describe('vendored schema template catalog', () => {
     expect(hits.map((t) => t.id)).toContain('purchase_order');
   });
 
+  it("matches a word that only appears in the schema's own summary", () => {
+    // "agreement" is in no title, id, category, blurb or field name — only in
+    // the Contract schema's description. Before this tier, the AND across
+    // terms made "legal agreement" return nothing at all.
+    expect(
+      searchSchemaTemplates({ query: 'agreement' }).map((t) => t.id)
+    ).toContain('contract');
+    // Both legal templates say "agreement" in their schema summary, so both
+    // are right; Contract leads on the featured tiebreak.
+    expect(
+      searchSchemaTemplates({ query: 'legal agreement' }).map((t) => t.id)
+    ).toEqual(['contract', 'nda']);
+  });
+
+  it('still ranks a title match above a schema-summary match', () => {
+    // NDA's schema summary says "non-disclosure agreement", so both match;
+    // a caller typing "nda" must still get NDA first.
+    expect(searchSchemaTemplates({ query: 'nda' })[0]?.id).toBe('nda');
+  });
+
   it('requires every term to match', () => {
     expect(searchSchemaTemplates({ query: 'invoice zzzznotathing' })).toEqual(
       []
