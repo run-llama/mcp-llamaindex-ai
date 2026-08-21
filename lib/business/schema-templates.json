@@ -1,0 +1,1737 @@
+{
+  "$comment": "GENERATED FILE - do not edit by hand. Produced from frontend/src/components/section/extract-v2/schema-designer/templates.ts by templates-export.test.ts (run `pnpm test:run templates-export -u` to refresh). This catalog is vendored into run-llama/mcp-llamaindex-ai at lib/mcp/tools/schema-templates.json - when this file changes in a PR, copy it across and bump the MCP copy in the same change, or the CLI serves stale templates.",
+  "version": 1,
+  "fingerprint": "4a2aa346170e97ae",
+  "categories": [
+    {
+      "id": "business",
+      "label": "Business"
+    },
+    {
+      "id": "legal",
+      "label": "Legal"
+    },
+    {
+      "id": "healthcare",
+      "label": "Healthcare"
+    },
+    {
+      "id": "finance_research",
+      "label": "Finance & Research"
+    },
+    {
+      "id": "education",
+      "label": "Education"
+    }
+  ],
+  "templates": [
+    {
+      "id": "catalog",
+      "title": "Product Catalog",
+      "description": "Products with attributes, pricing, and specifications.",
+      "category": "business",
+      "categoryLabel": "Business",
+      "featured": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "section_name": {
+            "description": "The name of the toy section (e.g., Table Toys, Active Toys).",
+            "type": "string"
+          },
+          "product_code": {
+            "description": "The unique product code for the toy (e.g., GA457).",
+            "type": "string"
+          },
+          "toy_name": {
+            "description": "The name of the toy.",
+            "type": "string"
+          },
+          "age_range": {
+            "description": "The recommended age range for the toy (e.g., 6 +, 4 +).",
+            "type": "string"
+          },
+          "player_range": {
+            "description": "The number of players the toy is designed for (e.g., 2, 2-4, 1-6).",
+            "type": "string"
+          },
+          "material": {
+            "description": "The primary material(s) the toy is made of (e.g., wood, cardboard).",
+            "type": "string"
+          },
+          "description": {
+            "description": "A brief description of the toy and its components and dimensions.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_name",
+          "product_code",
+          "toy_name",
+          "age_range",
+          "player_range",
+          "material",
+          "description"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "id": "invoice",
+      "title": "Invoice",
+      "description": "Vendor, line items, totals, and payment details.",
+      "category": "business",
+      "categoryLabel": "Business",
+      "featured": true,
+      "schema": {
+        "type": "object",
+        "required": [
+          "receiptNumber",
+          "datePaid",
+          "total",
+          "items"
+        ],
+        "properties": {
+          "receiptNumber": {
+            "type": "string",
+            "description": "Unique identifier for the receipt"
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "description": "Reference number for the invoice, if different from receipt number"
+          },
+          "datePaid": {
+            "type": "string",
+            "description": "Date when payment was processed (YYYY-MM-DD)"
+          },
+          "paymentMethod": {
+            "type": "object",
+            "description": "Details of how the payment was made",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "visa",
+                  "mastercard",
+                  "amex",
+                  "cash",
+                  "other"
+                ],
+                "description": "Type of payment method used"
+              },
+              "lastFourDigits": {
+                "type": "string",
+                "description": "Last 4 digits of the card if paid by card"
+              }
+            }
+          },
+          "merchant": {
+            "type": "object",
+            "description": "Information about the business that issued the invoice",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Business or company name"
+              },
+              "address": {
+                "type": "object",
+                "description": "Physical address of the merchant",
+                "properties": {
+                  "street": {
+                    "type": "string",
+                    "description": "Street address including unit/suite number if applicable"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "description": "State or province"
+                  },
+                  "postalCode": {
+                    "type": "string",
+                    "description": "ZIP or postal code"
+                  },
+                  "country": {
+                    "type": "string"
+                  }
+                }
+              },
+              "phone": {
+                "type": "string",
+                "description": "Contact phone number for the merchant"
+              },
+              "email": {
+                "type": "string",
+                "description": "Contact email address for the merchant"
+              }
+            }
+          },
+          "billTo": {
+            "type": "string",
+            "description": "Name or identifier of the customer being billed"
+          },
+          "items": {
+            "type": "array",
+            "description": "List of products or services being charged",
+            "items": {
+              "type": "object",
+              "required": [
+                "description",
+                "quantity",
+                "unitPrice",
+                "amount",
+                "period"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Name or description of the item or service"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "description": "Number of units purchased (minimum 1)"
+                },
+                "unitPrice": {
+                  "type": "number",
+                  "description": "Price per unit in the invoice currency"
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "Total amount for this line item (quantity × unitPrice)"
+                },
+                "period": {
+                  "type": "object",
+                  "description": "Service period for this item, if applicable",
+                  "properties": {
+                    "start": {
+                      "type": "string",
+                      "description": "Start date of service period (YYYY-MM-DD)"
+                    },
+                    "end": {
+                      "type": "string",
+                      "description": "End date of service period (YYYY-MM-DD)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Sum of all item amounts before tax or adjustments"
+          },
+          "total": {
+            "type": "number",
+            "description": "Final amount including all taxes and adjustments"
+          },
+          "amountPaid": {
+            "type": "number",
+            "description": "Actual amount paid, which may differ from total in case of partial payments"
+          }
+        }
+      }
+    },
+    {
+      "id": "purchase_order",
+      "title": "Purchase Order",
+      "description": "PO number, vendor, line items, and totals.",
+      "category": "business",
+      "categoryLabel": "Business",
+      "featured": false,
+      "schema": {
+        "type": "object",
+        "description": "Purchase order details including vendor, line items, and totals",
+        "required": [
+          "po_number",
+          "vendor_name",
+          "line_items",
+          "total_amount"
+        ],
+        "properties": {
+          "po_number": {
+            "type": "string",
+            "description": "Purchase order number"
+          },
+          "order_date": {
+            "type": "string",
+            "description": "Date the order was placed (YYYY-MM-DD)"
+          },
+          "vendor_name": {
+            "type": "string",
+            "description": "Name of the vendor or supplier"
+          },
+          "ship_to": {
+            "type": "string",
+            "description": "Shipping address"
+          },
+          "line_items": {
+            "type": "array",
+            "description": "Ordered items",
+            "items": {
+              "type": "object",
+              "required": [
+                "description",
+                "quantity",
+                "unit_price"
+              ],
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Item description"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "description": "Quantity ordered"
+                },
+                "unit_price": {
+                  "type": "number",
+                  "description": "Price per unit"
+                },
+                "line_total": {
+                  "type": "number",
+                  "description": "Quantity × unit price"
+                }
+              }
+            }
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Subtotal before tax and shipping"
+          },
+          "tax": {
+            "type": "number",
+            "description": "Tax amount"
+          },
+          "total_amount": {
+            "type": "number",
+            "description": "Grand total"
+          }
+        }
+      }
+    },
+    {
+      "id": "receipt",
+      "title": "Receipt",
+      "description": "Merchant, itemized purchases, tax, and total.",
+      "category": "business",
+      "categoryLabel": "Business",
+      "featured": false,
+      "schema": {
+        "type": "object",
+        "description": "Itemized purchase receipt",
+        "required": [
+          "merchant_name",
+          "date",
+          "total"
+        ],
+        "properties": {
+          "merchant_name": {
+            "type": "string",
+            "description": "Store or merchant name"
+          },
+          "date": {
+            "type": "string",
+            "description": "Transaction date (YYYY-MM-DD)"
+          },
+          "items": {
+            "type": "array",
+            "description": "Purchased items",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Item name"
+                },
+                "quantity": {
+                  "type": "number",
+                  "description": "Quantity purchased"
+                },
+                "price": {
+                  "type": "number",
+                  "description": "Item price"
+                }
+              }
+            }
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Subtotal before tax"
+          },
+          "tax": {
+            "type": "number",
+            "description": "Tax amount"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total amount paid"
+          },
+          "payment_method": {
+            "type": "string",
+            "description": "How the purchase was paid"
+          }
+        }
+      }
+    },
+    {
+      "id": "contract",
+      "title": "Contract",
+      "description": "Parties, dates, governing law, and key clauses.",
+      "category": "legal",
+      "categoryLabel": "Legal",
+      "featured": true,
+      "schema": {
+        "type": "object",
+        "description": "Key terms extracted from a contract or agreement",
+        "required": [
+          "parties",
+          "effective_date"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the agreement"
+          },
+          "parties": {
+            "type": "array",
+            "description": "Parties to the contract",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Legal name of the party"
+                },
+                "role": {
+                  "type": "string",
+                  "description": "Role (e.g. buyer, seller, licensor)"
+                }
+              }
+            }
+          },
+          "effective_date": {
+            "type": "string",
+            "description": "Date the contract takes effect (YYYY-MM-DD)"
+          },
+          "expiration_date": {
+            "type": "string",
+            "description": "Date the contract expires (YYYY-MM-DD)"
+          },
+          "governing_law": {
+            "type": "string",
+            "description": "Jurisdiction whose law governs the contract"
+          },
+          "payment_terms": {
+            "type": "string",
+            "description": "Summary of payment terms"
+          },
+          "termination_clause": {
+            "type": "string",
+            "description": "Summary of termination conditions"
+          },
+          "auto_renewal": {
+            "type": "boolean",
+            "description": "Whether the contract auto-renews"
+          }
+        }
+      }
+    },
+    {
+      "id": "nda",
+      "title": "NDA",
+      "description": "Parties, term, mutuality, and permitted uses.",
+      "category": "legal",
+      "categoryLabel": "Legal",
+      "featured": false,
+      "schema": {
+        "type": "object",
+        "description": "Key terms of a non-disclosure agreement",
+        "required": [
+          "disclosing_party",
+          "receiving_party",
+          "effective_date"
+        ],
+        "properties": {
+          "disclosing_party": {
+            "type": "string",
+            "description": "Party disclosing confidential information"
+          },
+          "receiving_party": {
+            "type": "string",
+            "description": "Party receiving confidential information"
+          },
+          "effective_date": {
+            "type": "string",
+            "description": "Effective date (YYYY-MM-DD)"
+          },
+          "term_length": {
+            "type": "string",
+            "description": "Duration the obligations remain in effect"
+          },
+          "is_mutual": {
+            "type": "boolean",
+            "description": "Whether confidentiality obligations are mutual"
+          },
+          "governing_law": {
+            "type": "string",
+            "description": "Governing jurisdiction"
+          },
+          "permitted_uses": {
+            "type": "array",
+            "description": "Permitted uses of the confidential information",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "hospital_list",
+      "title": "Hospital Directory",
+      "description": "Facilities with locations, contacts, and services.",
+      "category": "healthcare",
+      "categoryLabel": "Healthcare",
+      "featured": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "hospital_name": {
+            "type": "string"
+          },
+          "county": {
+            "type": "string"
+          },
+          "Trio HMO": {
+            "type": "boolean"
+          },
+          "Access + HMO": {
+            "type": "boolean"
+          },
+          "BlueHPN PPO": {
+            "type": "boolean"
+          },
+          "Tandem PPO": {
+            "type": "boolean"
+          },
+          "PPO": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hospital_name",
+          "county",
+          "Trio HMO",
+          "Access + HMO",
+          "BlueHPN PPO",
+          "Tandem PPO",
+          "PPO"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "id": "patient_intake",
+      "title": "Patient Intake",
+      "description": "Demographics, insurance, medications, and allergies.",
+      "category": "healthcare",
+      "categoryLabel": "Healthcare",
+      "featured": false,
+      "schema": {
+        "type": "object",
+        "description": "Patient intake form details",
+        "required": [
+          "patient_name",
+          "date_of_birth"
+        ],
+        "properties": {
+          "patient_name": {
+            "type": "string",
+            "description": "Full name of the patient"
+          },
+          "date_of_birth": {
+            "type": "string",
+            "description": "Date of birth (YYYY-MM-DD)"
+          },
+          "sex": {
+            "type": "string",
+            "description": "Patient sex"
+          },
+          "contact": {
+            "type": "object",
+            "description": "Patient contact details",
+            "properties": {
+              "phone": {
+                "type": "string",
+                "description": "Phone number"
+              },
+              "email": {
+                "type": "string",
+                "description": "Email address"
+              },
+              "address": {
+                "type": "string",
+                "description": "Mailing address"
+              }
+            }
+          },
+          "insurance": {
+            "type": "object",
+            "description": "Insurance information",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "description": "Insurance provider name"
+              },
+              "member_id": {
+                "type": "string",
+                "description": "Member or policy ID"
+              },
+              "group_number": {
+                "type": "string",
+                "description": "Group number"
+              }
+            }
+          },
+          "reason_for_visit": {
+            "type": "string",
+            "description": "Chief complaint or reason for visit"
+          },
+          "medications": {
+            "type": "array",
+            "description": "Current medications",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allergies": {
+            "type": "array",
+            "description": "Known allergies",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "financial_research",
+      "title": "Financial Research",
+      "description": "Metrics, ratings, and analysis from research reports.",
+      "category": "finance_research",
+      "categoryLabel": "Finance & Research",
+      "featured": false,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "report_metadata": {
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "description": "Title of the report.",
+                "type": "string"
+              },
+              "publication_date": {
+                "description": "Date the report was published.",
+                "type": "string"
+              },
+              "source": {
+                "description": "Source of the report.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "publication_date",
+              "source"
+            ],
+            "type": "object"
+          },
+          "key_takeaways": {
+            "additionalProperties": false,
+            "properties": {
+              "household_debt_payment_ratio_vs_disposable_income": {
+                "description": "Summary of household debt payments ratio relative to disposable personal income.",
+                "type": "string"
+              },
+              "average_mortgage_balances_increase": {
+                "description": "Percentage increase in average mortgage balances in June compared to 2019 average.",
+                "type": "string"
+              },
+              "mortgage_delinquency_trends": {
+                "description": "Summary of mortgage delinquency trends, especially early-stage delinquencies.",
+                "type": "string"
+              },
+              "new_student_loan_delinquencies": {
+                "description": "Summary of new student loan delinquencies, including affected demographics and potential impact on spending.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "household_debt_payment_ratio_vs_disposable_income",
+              "average_mortgage_balances_increase",
+              "mortgage_delinquency_trends",
+              "new_student_loan_delinquencies"
+            ],
+            "type": "object"
+          },
+          "debt_burden": {
+            "additionalProperties": false,
+            "properties": {
+              "total_household_debt": {
+                "additionalProperties": false,
+                "properties": {
+                  "q2_2025_qoq_increase_percent": {
+                    "description": "Quarter-over-quarter percentage increase in total household debt in 2Q 2025.",
+                    "type": "number"
+                  },
+                  "q2_2025_total_amount_trillion": {
+                    "description": "Total household debt in 2Q 2025 in trillions of dollars.",
+                    "type": "number"
+                  },
+                  "q2_2025_increase_amount_billion": {
+                    "description": "Increase in total household debt in 2Q 2025 in billions of dollars.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "q2_2025_qoq_increase_percent",
+                  "q2_2025_total_amount_trillion",
+                  "q2_2025_increase_amount_billion"
+                ],
+                "type": "object"
+              },
+              "debt_composition_q2_2025": {
+                "description": "Composition of total household debt by type in Q2 2025 (from Exhibit 2).",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "debt_type": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "percentage": {
+                      "description": "Percentage of total household debt.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "debt_type",
+                    "percentage"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "mortgage_balances_q2_2025": {
+                "additionalProperties": false,
+                "properties": {
+                  "increase_amount_billion": {
+                    "description": "Increase in mortgage balances in billions of dollars.",
+                    "type": "number"
+                  },
+                  "total_amount_trillion": {
+                    "description": "Total mortgage balances in trillions of dollars.",
+                    "type": "number"
+                  },
+                  "qoq_growth_percent": {
+                    "description": "Quarter-over-quarter growth percentage for mortgage balances.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "increase_amount_billion",
+                  "total_amount_trillion",
+                  "qoq_growth_percent"
+                ],
+                "type": "object"
+              },
+              "credit_card_qoq_growth_percent_q2_2025": {
+                "description": "Quarter-over-quarter growth percentage for credit cards in 2Q 2025.",
+                "type": "number"
+              },
+              "auto_loan_qoq_growth_percent_q2_2025": {
+                "description": "Quarter-over-quarter growth percentage for auto loans in 2Q 2025.",
+                "type": "number"
+              },
+              "household_debt_service_ratio": {
+                "additionalProperties": false,
+                "properties": {
+                  "q1_2025_ratio_percent": {
+                    "description": "Household debt service ratio in Q1 2025.",
+                    "type": "number"
+                  },
+                  "q4_2024_ratio_percent": {
+                    "description": "Household debt service ratio in Q4 2024.",
+                    "type": "number"
+                  },
+                  "historical_average_ratio_percent": {
+                    "description": "Historical average household debt service ratio.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "q1_2025_ratio_percent",
+                  "q4_2024_ratio_percent",
+                  "historical_average_ratio_percent"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "total_household_debt",
+              "debt_composition_q2_2025",
+              "mortgage_balances_q2_2025",
+              "credit_card_qoq_growth_percent_q2_2025",
+              "auto_loan_qoq_growth_percent_q2_2025",
+              "household_debt_service_ratio"
+            ],
+            "type": "object"
+          },
+          "mortgage_market_insights": {
+            "additionalProperties": false,
+            "properties": {
+              "average_mortgage_balance_indexed_june_2025": {
+                "description": "Average industry mortgage balance in June 2025, indexed to 2019 average (2019 avg = 100).",
+                "type": "number"
+              },
+              "average_mortgage_balance_above_2019_average_percent_june_2025": {
+                "description": "Average mortgage loan balance percentage above the 2019 average in June 2025.",
+                "type": "number"
+              },
+              "home_sales_june_2025": {
+                "additionalProperties": false,
+                "properties": {
+                  "existing_home_sales_yoy_change_percent": {
+                    "description": "Year-over-year change in existing home sales in June 2025.",
+                    "type": "number"
+                  },
+                  "existing_home_sales_mom_fall_percent": {
+                    "description": "Month-over-month fall in existing home sales in June 2025.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "existing_home_sales_yoy_change_percent",
+                  "existing_home_sales_mom_fall_percent"
+                ],
+                "type": "object"
+              },
+              "mortgage_delinquencies": {
+                "additionalProperties": false,
+                "properties": {
+                  "avg_amount_60_149_days_past_due_yoy_percent_june_2025": {
+                    "description": "Year-over-year increase in average amount for mortgages 60-149 days past due in June 2025.",
+                    "type": "number"
+                  },
+                  "peak_yoy_increase_60_149_days_past_due_sept_2024_percent": {
+                    "description": "Peak year-over-year increase in average amount for mortgages 60-149 days past due in September 2024.",
+                    "type": "number"
+                  },
+                  "delinquency_rate_one_to_four_unit_residential_properties_q1_2025_percent": {
+                    "description": "Delinquency rate for home loans on one-to-four-unit residential properties in Q1 2025.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "avg_amount_60_149_days_past_due_yoy_percent_june_2025",
+                  "peak_yoy_increase_60_149_days_past_due_sept_2024_percent",
+                  "delinquency_rate_one_to_four_unit_residential_properties_q1_2025_percent"
+                ],
+                "type": "object"
+              },
+              "housing_affordability_deterioration_dec_2021_to_june_2025_percent": {
+                "description": "Deterioration in housing affordability from December 2021 to June 2025.",
+                "type": "number"
+              },
+              "new_home_sales_decline_dec_2021_to_june_2025_percent": {
+                "description": "Decline in new home sales from December 2021 to June 2025.",
+                "type": "number"
+              },
+              "existing_home_sales_decline_dec_2021_to_june_2025_percent": {
+                "description": "Decline in existing home sales from December 2021 to June 2025.",
+                "type": "number"
+              },
+              "western_states_existing_home_sales_decline_june_2025_percent": {
+                "description": "Decline in existing home sales in western states as of June 2025.",
+                "type": "number"
+              },
+              "mortgage_accounts_30_days_delinquent_western_states_june_2025": {
+                "description": "Year-over-year growth rate of mortgage accounts 30+ days delinquent in June 2025 for top western states (from Exhibit 6).",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "state": {
+                      "type": "string"
+                    },
+                    "yoy_growth_percent": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "yoy_growth_percent"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "expected_mortgage_rates_range_through_2026": {
+                "description": "Expected range of mortgage rates through 2026.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "average_mortgage_balance_indexed_june_2025",
+              "average_mortgage_balance_above_2019_average_percent_june_2025",
+              "home_sales_june_2025",
+              "mortgage_delinquencies",
+              "housing_affordability_deterioration_dec_2021_to_june_2025_percent",
+              "new_home_sales_decline_dec_2021_to_june_2025_percent",
+              "existing_home_sales_decline_dec_2021_to_june_2025_percent",
+              "western_states_existing_home_sales_decline_june_2025_percent",
+              "mortgage_accounts_30_days_delinquent_western_states_june_2025",
+              "expected_mortgage_rates_range_through_2026"
+            ],
+            "type": "object"
+          },
+          "student_loan_insights": {
+            "additionalProperties": false,
+            "properties": {
+              "student_loan_balances_q2_2025": {
+                "additionalProperties": false,
+                "properties": {
+                  "increase_amount_billion": {
+                    "description": "Increase in student loan balances in billions of dollars in Q2 2025.",
+                    "type": "number"
+                  },
+                  "total_amount_trillion": {
+                    "description": "Total student loan balances in trillions of dollars in Q2 2025.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "increase_amount_billion",
+                  "total_amount_trillion"
+                ],
+                "type": "object"
+              },
+              "new_seriously_delinquent_student_loan_balances_percent": {
+                "description": "Percentage of new seriously delinquent (90+ days past due) student loan balances by year/period (from Exhibit 7).",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "period": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "percentage": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "period",
+                    "percentage"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "student_loan_accounts_by_generation_june_2025": {
+                "description": "Distribution of student loan accounts by generation in June 2025 (from Exhibit 8).",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "generation": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "percentage": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "generation",
+                    "percentage"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "delinquent_student_loan_holders_demographic": {
+                "description": "Demographic of majority seriously delinquent student loan holders in Q2 2025.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "student_loan_balances_q2_2025",
+              "new_seriously_delinquent_student_loan_balances_percent",
+              "student_loan_accounts_by_generation_june_2025",
+              "delinquent_student_loan_holders_demographic"
+            ],
+            "type": "object"
+          },
+          "generational_definitions": {
+            "description": "Definitions of generations used in the report.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "generation": {
+                  "type": "string"
+                },
+                "birth_years": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "generation",
+                "birth_years"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "report_metadata",
+          "key_takeaways",
+          "debt_burden",
+          "mortgage_market_insights",
+          "student_loan_insights",
+          "generational_definitions"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "id": "research_paper",
+      "title": "Research Paper",
+      "description": "Title, authors, abstract, and references.",
+      "category": "finance_research",
+      "categoryLabel": "Finance & Research",
+      "featured": false,
+      "schema": {
+        "type": "object",
+        "required": [
+          "title",
+          "authors",
+          "abstract",
+          "mainFindings"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The full title of the research paper"
+          },
+          "authors": {
+            "type": "array",
+            "description": "List of all authors of the paper",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Full name of the author"
+                },
+                "affiliation": {
+                  "type": "string",
+                  "description": "Institution or organization the author is affiliated with"
+                },
+                "email": {
+                  "type": "string",
+                  "description": "Contact email of the author if provided"
+                }
+              }
+            }
+          },
+          "abstract": {
+            "type": "string",
+            "description": "Complete abstract or summary of the paper"
+          },
+          "keywords": {
+            "type": "array",
+            "description": "Key terms and phrases that describe the paper's main topics",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mainFindings": {
+            "type": "array",
+            "description": "Key findings, conclusions, or contributions of the paper",
+            "items": {
+              "type": "string"
+            }
+          },
+          "methodology": {
+            "type": "object",
+            "description": "Research methods and approaches used",
+            "properties": {
+              "approach": {
+                "type": "string",
+                "description": "Overall research approach or study design"
+              },
+              "participants": {
+                "type": "string",
+                "description": "Description of study participants or data sources"
+              },
+              "methods": {
+                "type": "array",
+                "description": "Specific methods, techniques, or tools used",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "results": {
+            "type": "array",
+            "description": "Main results and outcomes of the research",
+            "items": {
+              "type": "object",
+              "properties": {
+                "finding": {
+                  "type": "string",
+                  "description": "Description of the specific result or finding"
+                },
+                "significance": {
+                  "type": "string",
+                  "description": "Statistical significance or importance of the finding"
+                },
+                "supportingData": {
+                  "type": "string",
+                  "description": "Relevant statistics, measurements, or data points"
+                }
+              }
+            }
+          },
+          "discussion": {
+            "type": "object",
+            "properties": {
+              "implications": {
+                "type": "array",
+                "description": "Theoretical or practical implications of the findings",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "limitations": {
+                "type": "array",
+                "description": "Study limitations or constraints",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "futureWork": {
+                "type": "array",
+                "description": "Suggested future research directions",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "references": {
+            "type": "array",
+            "description": "Key papers cited that are crucial to understanding this work",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "Title of the cited paper"
+                },
+                "authors": {
+                  "type": "string",
+                  "description": "Authors of the cited paper"
+                },
+                "year": {
+                  "type": "string",
+                  "description": "Publication year"
+                },
+                "relevance": {
+                  "type": "string",
+                  "description": "Why this reference is important to the current paper"
+                }
+              },
+              "required": [
+                "title",
+                "authors"
+              ]
+            }
+          },
+          "publication": {
+            "type": "object",
+            "properties": {
+              "journal": {
+                "type": "string",
+                "description": "Name of the journal or conference"
+              },
+              "year": {
+                "type": "string",
+                "description": "Year of publication"
+              },
+              "doi": {
+                "type": "string",
+                "description": "Digital Object Identifier (DOI) of the paper"
+              },
+              "url": {
+                "type": "string",
+                "description": "URL where the paper can be accessed"
+              }
+            },
+            "required": [
+              "year"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "ten_k",
+      "title": "10-K Filing",
+      "description": "Company financials and disclosures from a 10-K.",
+      "category": "finance_research",
+      "categoryLabel": "Finance & Research",
+      "featured": false,
+      "schema": {
+        "title": "SEC 10K/Q Filing Schema",
+        "description": "Streamlined schema for parsing key information from 10-K and 10-Q filings",
+        "type": "object",
+        "required": [
+          "filingInfo",
+          "companyProfile",
+          "financialHighlights",
+          "managementHighlights"
+        ],
+        "properties": {
+          "filingInfo": {
+            "type": "object",
+            "description": "Basic information about the filing",
+            "required": [
+              "filingType",
+              "filingDate",
+              "reportingPeriodEnd",
+              "cik"
+            ],
+            "properties": {
+              "filingType": {
+                "type": "string",
+                "enum": [
+                  "10-K",
+                  "10-Q",
+                  "10-K/A",
+                  "10-Q/A"
+                ],
+                "description": "Type of SEC filing"
+              },
+              "filingDate": {
+                "type": "string",
+                "description": "Date when filing was submitted to SEC (YYYY-MM-DD)"
+              },
+              "reportingPeriodEnd": {
+                "type": "string",
+                "description": "End date of reporting period (YYYY-MM-DD)"
+              },
+              "fiscalYear": {
+                "type": "integer",
+                "description": "Fiscal year"
+              },
+              "fiscalQuarter": {
+                "type": "integer",
+                "description": "Fiscal quarter (if 10-Q, value 1-4)"
+              },
+              "cik": {
+                "type": "string",
+                "description": "Central Index Key"
+              },
+              "documentUrl": {
+                "type": "string",
+                "description": "URL to filing on SEC website"
+              }
+            }
+          },
+          "companyProfile": {
+            "type": "object",
+            "description": "Essential company information",
+            "required": [
+              "name",
+              "ticker",
+              "reportingCurrency"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Legal name of company"
+              },
+              "ticker": {
+                "type": "string",
+                "description": "Stock ticker symbol"
+              },
+              "isAdr": {
+                "type": "boolean",
+                "description": "Whether security is an American Depositary Receipt"
+              },
+              "reportingCurrency": {
+                "type": "string",
+                "description": "Currency used in financial statements"
+              },
+              "location": {
+                "type": "string",
+                "description": "Company headquarters location (City, State/Country)"
+              },
+              "incorporationLocation": {
+                "type": "string",
+                "description": "Jurisdiction of incorporation"
+              },
+              "businessDescription": {
+                "type": "string",
+                "description": "Brief description of business"
+              },
+              "sector": {
+                "type": "string",
+                "description": "Primary sector"
+              },
+              "industry": {
+                "type": "string",
+                "description": "Specific industry"
+              },
+              "sicCode": {
+                "type": "string",
+                "description": "Standard Industrial Classification code"
+              },
+              "employeeCount": {
+                "type": "integer",
+                "description": "Number of employees"
+              },
+              "exchanges": {
+                "type": "array",
+                "description": "Stock exchanges where listed",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "auditor": {
+                "type": "string",
+                "description": "Company's auditor"
+              }
+            }
+          },
+          "financialHighlights": {
+            "type": "object",
+            "description": "Key financial metrics from this reporting period",
+            "required": [
+              "periodEnd",
+              "revenue",
+              "netIncome"
+            ],
+            "properties": {
+              "periodEnd": {
+                "type": "string",
+                "description": "End date of reporting period (YYYY-MM-DD)"
+              },
+              "comparisonPeriodEnd": {
+                "type": "string",
+                "description": "End date of comparison period, typically prior year/quarter (YYYY-MM-DD)"
+              },
+              "currency": {
+                "type": "string",
+                "description": "Currency of financial figures"
+              },
+              "unit": {
+                "type": "string",
+                "description": "Unit of financial figures (thousands, millions, etc.)"
+              },
+              "revenue": {
+                "type": "number",
+                "description": "Total revenue for period"
+              },
+              "revenuePriorPeriod": {
+                "type": "number",
+                "description": "Revenue from comparison period"
+              },
+              "revenueGrowth": {
+                "type": "number",
+                "description": "Revenue growth percentage"
+              },
+              "grossProfit": {
+                "type": "number",
+                "description": "Gross profit"
+              },
+              "grossMargin": {
+                "type": "number",
+                "description": "Gross margin percentage"
+              },
+              "operatingIncome": {
+                "type": "number",
+                "description": "Operating income"
+              },
+              "operatingMargin": {
+                "type": "number",
+                "description": "Operating margin percentage"
+              },
+              "netIncome": {
+                "type": "number",
+                "description": "Net income"
+              },
+              "netMargin": {
+                "type": "number",
+                "description": "Net margin percentage"
+              },
+              "eps": {
+                "type": "number",
+                "description": "Basic earnings per share"
+              },
+              "dilutedEps": {
+                "type": "number",
+                "description": "Diluted earnings per share"
+              },
+              "ebitda": {
+                "type": "number",
+                "description": "EBITDA (Earnings Before Interest, Taxes, Depreciation, Amortization)"
+              },
+              "freeCashFlow": {
+                "type": "number",
+                "description": "Free cash flow"
+              }
+            }
+          },
+          "managementHighlights": {
+            "type": "object",
+            "description": "Key highlights from Management Discussion & Analysis",
+            "properties": {
+              "businessOverview": {
+                "type": "string",
+                "description": "Overview of business and strategy"
+              },
+              "keyTrends": {
+                "type": "string",
+                "description": "Key trends affecting performance"
+              },
+              "liquidityAssessment": {
+                "type": "string",
+                "description": "Management assessment of liquidity"
+              },
+              "outlookSummary": {
+                "type": "string",
+                "description": "Future outlook/guidance"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "resume",
+      "title": "Resume",
+      "description": "Contact, experience, education, and skills.",
+      "category": "education",
+      "categoryLabel": "Education",
+      "featured": true,
+      "schema": {
+        "type": "object",
+        "required": [
+          "basics",
+          "skills",
+          "experience"
+        ],
+        "properties": {
+          "basics": {
+            "type": "object",
+            "required": [
+              "name",
+              "email"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The full name of the candidate"
+              },
+              "email": {
+                "type": "string",
+                "description": "The email address of the candidate"
+              },
+              "phone": {
+                "type": "string",
+                "description": "The phone number of the candidate in any standard format"
+              },
+              "location": {
+                "type": "object",
+                "description": "The current location of the candidate",
+                "properties": {
+                  "city": {
+                    "type": "string",
+                    "description": "The city where the candidate is located"
+                  },
+                  "region": {
+                    "type": "string",
+                    "description": "State or province of the candidate"
+                  },
+                  "country": {
+                    "type": "string",
+                    "description": "Country where the candidate is located"
+                  }
+                }
+              },
+              "profiles": {
+                "type": "array",
+                "description": "Professional social media profiles or personal websites",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "network": {
+                      "type": "string",
+                      "description": "Name of the social network (e.g., LinkedIn, GitHub)"
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "Full URL to the profile"
+                    }
+                  }
+                }
+              },
+              "summary": {
+                "type": "string",
+                "description": "Brief professional summary or objective statement"
+              }
+            }
+          },
+          "skills": {
+            "type": "array",
+            "description": "Technical and professional skills grouped by category",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "description": "Skill category (e.g., Programming Languages, Tools, Soft Skills)"
+                },
+                "keywords": {
+                  "type": "array",
+                  "description": "List of specific skills within the category",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "beginner",
+                    "intermediate",
+                    "advanced",
+                    "expert"
+                  ],
+                  "description": "Proficiency level in this skill category"
+                }
+              }
+            }
+          },
+          "experience": {
+            "type": "array",
+            "description": "Professional work experience in reverse chronological order",
+            "items": {
+              "type": "object",
+              "required": [
+                "company",
+                "position",
+                "startDate"
+              ],
+              "properties": {
+                "company": {
+                  "type": "string",
+                  "description": "Name of the employer or company"
+                },
+                "position": {
+                  "type": "string",
+                  "description": "Job title or role"
+                },
+                "startDate": {
+                  "type": "string",
+                  "description": "Start date of employment (YYYY-MM or YYYY-MM-DD)"
+                },
+                "endDate": {
+                  "type": "string",
+                  "description": "End date of employment (YYYY-MM or YYYY-MM-DD), or 'Present' if current"
+                },
+                "highlights": {
+                  "type": "array",
+                  "description": "Key achievements, responsibilities, or contributions",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "technologies": {
+                  "type": "array",
+                  "description": "Technical tools, languages, or frameworks used in this role",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "education": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "institution",
+                "degree"
+              ],
+              "properties": {
+                "institution": {
+                  "type": "string"
+                },
+                "degree": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "graduationDate": {
+                  "type": "string"
+                },
+                "gpa": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "certifications": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "validUntil": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "date"
+              ]
+            }
+          },
+          "publications": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "publisher": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "transcript",
+      "title": "Academic Transcript",
+      "description": "Student, program, GPA, and course grades.",
+      "category": "education",
+      "categoryLabel": "Education",
+      "featured": false,
+      "schema": {
+        "type": "object",
+        "description": "Academic transcript details",
+        "required": [
+          "student_name",
+          "courses"
+        ],
+        "properties": {
+          "student_name": {
+            "type": "string",
+            "description": "Full name of the student"
+          },
+          "student_id": {
+            "type": "string",
+            "description": "Student identifier"
+          },
+          "institution": {
+            "type": "string",
+            "description": "Name of the school or university"
+          },
+          "program": {
+            "type": "string",
+            "description": "Degree program or major"
+          },
+          "gpa": {
+            "type": "number",
+            "description": "Cumulative grade point average"
+          },
+          "courses": {
+            "type": "array",
+            "description": "Courses taken",
+            "items": {
+              "type": "object",
+              "required": [
+                "course_name",
+                "grade"
+              ],
+              "properties": {
+                "course_code": {
+                  "type": "string",
+                  "description": "Course code"
+                },
+                "course_name": {
+                  "type": "string",
+                  "description": "Course title"
+                },
+                "term": {
+                  "type": "string",
+                  "description": "Term or semester"
+                },
+                "credits": {
+                  "type": "number",
+                  "description": "Credit hours"
+                },
+                "grade": {
+                  "type": "string",
+                  "description": "Grade received"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

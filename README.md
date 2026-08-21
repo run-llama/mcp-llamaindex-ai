@@ -14,6 +14,27 @@ Visit [our docs](https://developers.llamaindex.ai/for-agents/) to learn more, or
 | `parseFile` | Parses an uploaded file and returns its content as markdown or plain text |
 | `classifyFile` | Classifies a file against a set of custom categories, returning the matched category, confidence score, and reasoning |
 | `splitFile` | Splits a multi-section document into labelled segments based on custom categories |
+| `searchSchemaTemplates` | Searches the built-in starter extraction schemas by keyword or category |
+| `getSchemaTemplate` | Returns the full JSON Schema for one starter template |
+| `createExtractionConfigFromSchema` | Creates an extraction configuration from a template id or an explicit JSON Schema, returning a configuration id for `extractFile` |
+
+### Schema templates
+
+`lib/business/schema-templates.json` is the starter-schema catalog shown in the
+LlamaCloud Extract playground, vendored here so the CLI can offer the same
+templates without an LLM round-trip through `generateExtractionConfig`.
+
+**It is generated, not authored.** The source of truth is
+`frontend/src/components/section/extract-v2/schema-designer/templates.ts` in the
+`run-llama/platform` repo, which emits
+`schema-templates.generated.json` via `templates-export.test.ts`
+(`pnpm vitest run templates-export -u`). To pick up template changes, copy that
+file over this one verbatim — no reformatting; `*.json` is in `.prettierignore`
+here for exactly that reason.
+
+The catalog carries a `fingerprint` of its own body, and
+`__tests__/schema-templates.test.ts` recomputes it with the same hash the
+platform repo uses. A hand-edit or a half-finished copy fails that test.
 
 ## Architecture
 
