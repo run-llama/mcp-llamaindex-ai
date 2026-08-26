@@ -300,6 +300,7 @@ export function registerGetUserProjectsTool(server: McpServer) {
     {
       title: 'List Projects',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (_args, extra) => {
@@ -449,6 +450,7 @@ export function registerLitParseTool(server: McpServer) {
     {
       title: 'Parse File with LiteParse',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -519,6 +521,7 @@ export function registerLitIsComplexTool(server: McpServer) {
     {
       title: 'Estimate File Complexity',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -966,6 +969,7 @@ export function registerSearchSchemaTemplatesTool(server: McpServer) {
     {
       title: 'Search Schema Templates',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: false,
     },
     async (args, extra) => {
@@ -1006,6 +1010,7 @@ export function registerGetSchemaTemplateTool(server: McpServer) {
     {
       title: 'Get Schema Template',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: false,
     },
     async (args, extra) => {
@@ -1183,6 +1188,7 @@ export function registerListIndexesTool(server: McpServer) {
     {
       title: 'List Indexes',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1249,6 +1255,7 @@ export function registerFindFilesInIndexTool(server: McpServer) {
     {
       title: 'Find Files in Index',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1330,6 +1337,7 @@ export function registerReadFileFromIndexTool(server: McpServer) {
     {
       title: 'Read File from Index',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1410,6 +1418,7 @@ export function registerGrepFileFromIndexTool(server: McpServer) {
     {
       title: 'Grep File in Index',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1490,6 +1499,7 @@ export function registerRetrieveFromIndexTool(server: McpServer) {
     {
       title: 'Search Index',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1622,6 +1632,7 @@ export function registerListDirectoriesTool(server: McpServer) {
     {
       title: 'List Directories',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1692,6 +1703,7 @@ export function registerListDirectoryTool(server: McpServer) {
     {
       title: 'List Directory Contents',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {
@@ -1906,6 +1918,7 @@ export function registerGetIndexStatusTool(server: McpServer) {
     {
       title: 'Get Index Status',
       readOnlyHint: true,
+      destructiveHint: false,
       openWorldHint: true,
     },
     async (args, extra) => {

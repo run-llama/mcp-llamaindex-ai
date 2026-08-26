@@ -86,9 +86,13 @@ describe('tool annotations', () => {
     expect(registered).toEqual([...READ_ONLY, ...WRITES].sort());
   });
 
+  // destructiveHint is redundant under readOnlyHint per the MCP spec, but
+  // review tooling (the OpenAI connector submission form among them) rejects
+  // tools that leave it unstated, so every tool declares it explicitly.
   it.each(READ_ONLY)('%s is annotated read-only', async (name) => {
     const tool = (await listTools()).find((t) => t.name === name);
     expect(tool?.annotations?.readOnlyHint).toBe(true);
+    expect(tool?.annotations?.destructiveHint).toBe(false);
   });
 
   it.each(WRITES)(
