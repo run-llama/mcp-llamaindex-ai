@@ -41,8 +41,16 @@ function privateHostsAllowed(): boolean {
   return process.env.ALLOW_PRIVATE_UPLOAD_HOSTS?.trim() === 'true';
 }
 
-/** Redirects are followed by hand so each hop is checked. Three is plenty. */
-const MAX_REDIRECTS = 3;
+/**
+ * Redirects are followed by hand so each hop is checked.
+ *
+ * Ten rather than a tighter number because the code this replaced used the
+ * platform default of twenty, and real document links spend hops freely:
+ * http to https, apex to www, a login bounce, then a signed storage URL.
+ * Refusing at three would have turned a working SharePoint or Drive link into
+ * an error, which is the failure this guard is least allowed to cause.
+ */
+const MAX_REDIRECTS = 10;
 
 function ipv4ToInt(address: string): number | undefined {
   const parts = address.split('.');
@@ -167,6 +175,10 @@ function isBlockedV6(address: string): boolean {
 
   if ((a & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
   if ((a & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  // fec0::/10 site-local. Deprecated by RFC 3879 and caught by neither mask
+  // above, but still configured on older enterprise equipment — which is the
+  // network a self-hosted deployment sits in.
+  if ((a & 0xffc0) === 0xfec0) return true;
   if ((a & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   return false;
 }
@@ -183,6 +195,20 @@ export function isBlockedAddress(address: string): boolean {
  * internet. Every address, not the first: a name that answers with one public
  * and one private address would otherwise pass and then connect to either.
  */
+/**
+ * One message for both "no such name" and "resolves somewhere private".
+ *
+ * Answering those differently tells a caller which internal names exist, and
+ * that they are internally addressed — walking wiki.internal, vault.internal
+ * and reading the difference is exactly the enumeration this guard is meant to
+ * prevent. The operator still gets the distinction, in the log.
+ */
+function unreachable(url: URL): BlockedUrlError {
+  return new BlockedUrlError(
+    `"${url.hostname}" could not be fetched. Provide a publicly reachable URL.`
+  );
+}
+
 async function assertReachable(url: URL): Promise<void> {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new BlockedUrlError(
@@ -201,17 +227,16 @@ async function assertReachable(url: URL): Promise<void> {
     try {
       addresses = (await lookup(hostname, { all: true })).map((a) => a.address);
     } catch {
-      // A name that does not resolve cannot be fetched either way, and saying
-      // which is which would confirm internal names exist.
-      throw new BlockedUrlError(`Could not resolve "${url.hostname}".`);
+      getLogger().debug(`Upload URL host did not resolve: ${url.hostname}`);
+      throw unreachable(url);
     }
   }
 
   if (addresses.length === 0 || addresses.some(isBlockedAddress)) {
-    throw new BlockedUrlError(
-      `"${url.hostname}" resolves to an address this server will not fetch from. ` +
-        'Provide a publicly reachable URL.'
+    getLogger().warn(
+      `Upload URL host resolves into blocked space: ${url.hostname}`
     );
+    throw unreachable(url);
   }
 }
 
@@ -243,6 +268,9 @@ export async function fetchRemoteFile(rawUrl: string): Promise<Response> {
     if (!location) {
       return response;
     }
+    // Nothing reads a redirect's body, and an abandoned one keeps its
+    // connection out of the pool until GC gets to it.
+    await response.body?.cancel();
     const next = new URL(location, url);
     getLogger().debug(`Following redirect to ${next.hostname}`);
     url = next;

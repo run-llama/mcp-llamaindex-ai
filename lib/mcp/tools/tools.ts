@@ -289,9 +289,6 @@ export function registerUploadFileByUrlTool(server: McpServer) {
             isError: true,
           } as ToolErrorResponse;
         }
-            isError: true,
-          } as ToolErrorResponse;
-        }
         try {
           const fileData = await response.arrayBuffer();
           const fileId = await uploadFile({

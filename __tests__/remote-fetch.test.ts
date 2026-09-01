@@ -63,6 +63,7 @@ describe('isBlockedAddress', () => {
     ['::1', 'IPv6 loopback'],
     ['fd00::1', 'IPv6 unique-local'],
     ['fe80::1', 'IPv6 link-local'],
+    ['fec0::1', 'IPv6 site-local, deprecated but still configured'],
     ['::ffff:169.254.169.254', 'IPv4-mapped metadata'],
     // The same address as the line above, in the spelling `URL` produces.
     ['::ffff:a9fe:a9fe', 'IPv4-mapped metadata, hex groups'],
@@ -191,14 +192,43 @@ describe('fetchRemoteFile', () => {
     ).rejects.toThrow(BlockedUrlError);
   });
 
-  it('refuses a name that does not resolve, without saying why', async () => {
-    mockLookup.mockRejectedValue(new Error('ENOTFOUND'));
+  it('tells a caller nothing about which internal names exist', async () => {
+    mockLookup.mockRejectedValueOnce(new Error('ENOTFOUND'));
+    const missing = await fetchRemoteFile('https://nope.internal/x').catch(
+      (e: Error) => e.message
+    );
 
-    // Distinguishing "no such name" from "internal name" would confirm which
-    // internal names exist.
-    await expect(
-      fetchRemoteFile('https://nope.internal/doc.pdf')
-    ).rejects.toThrow(/Could not resolve/);
+    resolvesTo('10.0.0.5');
+    const internal = await fetchRemoteFile('https://wiki.internal/x').catch(
+      (e: Error) => e.message
+    );
+
+    // Asserted as equality rather than against wording: the property that
+    // matters is that a caller walking wiki.internal, vault.internal and so on
+    // cannot read which resolve and which are internally addressed. The
+    // operator still gets the distinction, in the log.
+    expect(missing).toBe(
+      '"nope.internal" could not be fetched. Provide a publicly reachable URL.'
+    );
+    expect(internal).toBe(
+      '"wiki.internal" could not be fetched. Provide a publicly reachable URL.'
+    );
+    expect(missing.replace('nope', 'wiki')).toBe(internal);
+  });
+
+  it('follows a longer redirect chain than the old default would have broken', async () => {
+    resolvesTo('93.184.216.34');
+    // http -> https -> www -> login bounce -> signed storage URL is ordinary.
+    for (let i = 0; i < 5; i++) {
+      mockFetch.mockResolvedValueOnce(
+        redirectTo(`https://example.com/hop${i}`)
+      );
+    }
+    mockFetch.mockResolvedValueOnce(ok());
+
+    const response = await fetchRemoteFile('https://example.com/doc.pdf');
+
+    expect(response.status).toBe(200);
   });
 });
 
