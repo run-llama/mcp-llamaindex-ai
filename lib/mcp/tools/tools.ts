@@ -1,4 +1,4 @@
-import { ensureUserAuthenticated } from '@/lib/auth/helpers';
+import { ensureUserAuthenticated, isApiKeyCaller } from '@/lib/auth/helpers';
 import { publicBaseUrl } from '@/lib/urls';
 import {
   classifyFile,
@@ -107,7 +107,7 @@ function jsonResult(value: unknown): ToolTextResponse {
 export function registerGetUploadUrlTool(server: McpServer) {
   server.tool(
     'getUploadUrl',
-    'Get a pre-signed URL to upload a file to the LlamaParse S3 storage',
+    'Get a pre-signed URL to upload a file to the LlamaParse S3 storage. Not available when authenticating with an API key — use uploadFileByUrl instead.',
     {
       purpose: z
         .string()
@@ -136,6 +136,26 @@ export function registerGetUploadUrlTool(server: McpServer) {
         ensureUserAuthenticated(authInfo);
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
+        // This tool parks the caller's own bearer in Redis for ten minutes so
+        // the upload route can spend it. That is bounded for an OAuth token,
+        // which expires; an API key does not, so the same write would leave a
+        // standing credential at rest for anyone who reaches the store or the
+        // URL. uploadFileByUrl needs no such handoff.
+        if (isApiKeyCaller(authInfo)) {
+          span.setAttribute('uploadUrl.refused', 'api_key');
+          span.end();
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  'Uploading a local file is not available when authenticating with an API key. ' +
+                  'Use uploadFileByUrl with a URL this server can reach, or connect with OAuth.',
+              },
+            ],
+            isError: true,
+          } as ToolErrorResponse;
+        }
         // Resolved before the token is written and the span is closed: this
         // can now reject several malformed shapes, and throwing after the write
         // burns a token and records a successful span for a failed call.
