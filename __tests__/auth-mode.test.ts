@@ -28,6 +28,7 @@ jest.mock('jose', () => ({
 }));
 
 // The deployment this file is about: no WorkOS configuration at all.
+const modeBeforeThisFile = process.env.MCP_AUTH_MODE;
 process.env.MCP_AUTH_MODE = 'api_key';
 process.env.LLAMA_CLOUD_REGION = 'na';
 delete process.env.WORKOS_CLIENT_ID;
@@ -49,6 +50,17 @@ function requestWith(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+// Jest reuses worker processes across files and process.env is per-process, so
+// leaving this set would silently put a sibling file's region cases on the
+// api_key branch and fail them by test order.
+afterAll(() => {
+  if (modeBeforeThisFile === undefined) {
+    delete process.env.MCP_AUTH_MODE;
+  } else {
+    process.env.MCP_AUTH_MODE = modeBeforeThisFile;
+  }
+});
 
 beforeEach(() => {
   listProjects.mockReset();
@@ -92,7 +104,9 @@ describe('a deployment serving API keys only', () => {
     // The adapter attaches resource_metadata to every 401 it builds, naming a
     // discovery document this mode answers with a 404. Sending a client there
     // is worse than telling it plainly what this server takes.
-    expect(response.headers.get('WWW-Authenticate')).toBeNull();
+    const challenge = response.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('Bearer');
+    expect(challenge).not.toContain('resource_metadata');
     expect(await response.text()).toContain('API keys only');
     expect(verifyJwt).not.toHaveBeenCalled();
   });

@@ -1,8 +1,11 @@
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs';
 import { NextResponse } from 'next/server';
 
-// Read directly rather than through lib/auth/mode: middleware is bundled for
-// the edge runtime, and the mode module is server-only.
+// Read directly rather than through lib/auth/mode, which validates the value
+// and throws on anything it does not recognise. Middleware runs ahead of every
+// route, so a throw here is a 500 on the whole deployment; the handler already
+// rejects a bad value at boot, where it is visible. Only the exact opt-in
+// switches this off.
 const apiKeyOnly = process.env.MCP_AUTH_MODE?.trim() === 'api_key';
 
 /**

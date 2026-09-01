@@ -176,9 +176,12 @@ function resolveRegionConfig(): { region: Region; baseUrl: string } {
   }
 
   // A self-hosted deployment points at the customer's own LlamaCloud, which is
-  // by definition not one of ours. The region still has to be stated: it picks
-  // the wrong-region wording in lib/auth/token-errors.ts, and an unknown host
-  // implies nothing about where the deployment sits.
+  // by definition not one of ours. The region is still required, but not for
+  // routing — the base URL is explicit, and the wrong-region wording in
+  // token-errors.ts is unreachable here because a JWT never gets as far as
+  // being verified. It is required so the deployment states which region it
+  // serves rather than silently inheriting NA, which is the value every
+  // profile lookup would otherwise return.
   if (authMode() === 'api_key') {
     if (!declared) {
       throw new RegionConfigError(
@@ -223,6 +226,15 @@ export function llamaCloudBaseUrl(): string {
  */
 export function assertRegionConfig(): void {
   const { region } = resolveRegionConfig();
+  // The compute pin exists to hold *our* EU residency commitment: documents are
+  // terminated and parsed inside the function, so an EU deployment of ours must
+  // run on EU compute. A self-hosted deployment talks to the customer's own
+  // LlamaCloud under whatever commitments they have made, and refusing to boot
+  // because their Vercel project sits in the wrong place would enforce a
+  // promise we did not make on their behalf.
+  if (authMode() === 'api_key') {
+    return;
+  }
   assertComputeRegion(region);
 }
 

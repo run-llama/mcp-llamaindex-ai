@@ -243,8 +243,10 @@ LLAMA_CLOUD_BASE_URL=https://llamacloud.internal.example.com
 REDIS_URI=redis://...
 ```
 
-No `WORKOS_*` variable is needed, and none is read. Callers authenticate by
-sending a LlamaCloud API key as the bearer token:
+No `WORKOS_*` variable is required. (The AuthKit package is still imported and
+reads a few at load, defaulting to empty; nothing in this mode depends on
+them.) Callers authenticate by sending a LlamaCloud API key as the bearer
+token:
 
 ```bash
 claude mcp add --transport http llamacloud https://<your-deployment>/mcp \
@@ -261,9 +263,11 @@ What changes in this mode:
   stores the caller's credential so the upload route can spend it, which is
   bounded for an expiring token and not for a key. Use `uploadFileByUrl`.
 - `LLAMA_CLOUD_BASE_URL` may name your own host. It must be `https`, since it
-  carries the API key and the document contents, and `LLAMA_CLOUD_REGION` is
-  still required: an unrecognised host says nothing about where the deployment
-  sits, and the region selects the wrong-region wording in error messages.
+  carries the API key and the document contents. `LLAMA_CLOUD_REGION` is still
+  required so the deployment states what it serves rather than inheriting `na`
+  by default; it does not affect routing, because the base URL is explicit.
+- The EU compute pin is not applied. It exists to hold our own residency
+  commitment, and a self-hosted deployment runs wherever you put it.
 
 `MCP_AUTH_MODE` is deliberately explicit and never inferred from a missing
 `WORKOS_CLIENT_ID`, so a variable dropped from the hosted configuration fails

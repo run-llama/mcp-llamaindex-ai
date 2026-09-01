@@ -121,10 +121,30 @@ function bearerToken(request: Request): string | undefined {
  * and cannot complete headlessly. The status still says re-authenticate; only
  * the instruction to do it via OAuth is dropped.
  */
+/**
+ * A 401 that names the scheme but not the discovery document.
+ *
+ * RFC 6750 requires a `WWW-Authenticate` on a rejected bearer, so omitting it
+ * entirely leaves a conformant client unable to tell what this endpoint even
+ * accepts. What the adapter's own challenge adds on top — a `resource_metadata`
+ * pointer at OAuth discovery — is the part that misleads here: it steers a
+ * caller holding an API key into a sign-in flow they cannot complete, and in
+ * api_key mode it names a document this deployment answers with a 404.
+ *
+ * `description` is always a literal from this module. The unescaped
+ * interpolation that lib/auth/token-errors.ts guards against needs
+ * caller-controlled text, and there is none.
+ */
 function unauthorized(description: string): Response {
   return new Response(
     JSON.stringify({ error: 'invalid_token', error_description: description }),
-    { status: 401, headers: { 'Content-Type': 'application/json' } }
+    {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json',
+        'WWW-Authenticate': `Bearer error="invalid_token", error_description="${description}"`,
+      },
+    }
   );
 }
 

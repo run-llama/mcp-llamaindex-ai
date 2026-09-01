@@ -155,9 +155,12 @@ describe('a rejected API key', () => {
     const response = await handler(requestWith(KEY));
 
     expect(response.status).toBe(401);
-    // The adapter's own challenge points at OAuth discovery. A caller holding
-    // an API key cannot complete that flow, so the header must not be sent.
-    expect(response.headers.get('WWW-Authenticate')).toBeNull();
+    // The scheme is named, because a conformant client needs to know what this
+    // endpoint accepts. The discovery pointer is not: that is the part that
+    // steers a caller holding an API key into a flow they cannot complete.
+    const challenge = response.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('Bearer');
+    expect(challenge).not.toContain('resource_metadata');
     expect(wrapped).not.toHaveBeenCalled();
   });
 

@@ -9,7 +9,7 @@ export async function GET() {
   // Nothing to proxy in api_key mode: there is no AuthKit domain configured,
   // and no flow for a client to discover.
   if (!isOAuthEnabled()) {
-    return NextResponse.json(null, { status: 404 });
+    return new NextResponse(null, { status: 404 });
   }
 
   // Outside the try: a bad WORKOS_AUTHKIT_DOMAIN is permanent, and answering

@@ -402,6 +402,10 @@ describe('a self-hosted LlamaCloud host', () => {
   const env = process.env;
   beforeEach(() => {
     process.env = { ...env };
+    // Explicit rather than inherited: a sibling file that ran first in this
+    // worker may have left api_key set, which would put the cases above on the
+    // self-hosted branch and pass where they must throw.
+    delete process.env.MCP_AUTH_MODE;
   });
   afterEach(() => {
     process.env = env;
