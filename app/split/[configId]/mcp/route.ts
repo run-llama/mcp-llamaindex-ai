@@ -12,10 +12,10 @@ import {
 // configuration on LlamaCloud supplies the categories and splitting
 // strategy.
 //
-// As in /index/[indexId]/mcp, we build a fresh handler per request rather
-// than memoising per configId: `configId` is user-supplied and effectively
-// unbounded, so a process-lifetime cache would leak memory, and the
-// construction cost is dwarfed by the downstream LlamaParse API calls.
+// We build a fresh handler per request rather than memoising per configId:
+// `configId` is user-supplied and effectively unbounded, so a process-lifetime
+// cache would leak memory, and the construction cost is dwarfed by the
+// downstream LlamaParse API calls.
 
 type RouteContext = {
   params: Promise<{ configId: string }>;
