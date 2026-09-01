@@ -39,6 +39,18 @@ const nextConfig = {
           'https://developers.llamaindex.ai/llamaparse/for-agents/mcp/',
         permanent: false,
       },
+      {
+        // `/index/[indexId]/mcp` was a live endpoint before /index/mcp
+        // replaced it. A 307 keeps the method and body, so already-configured
+        // clients reach a working server instead of a 404: they re-list tools
+        // on connect and pass `indexId` per call instead of having it pinned
+        // by the URL. The id in the old URL is not carried over — the
+        // destination's tools take it as an argument, so a caller that only
+        // knew its index through the URL now has to call listIndexes first.
+        source: '/index/:indexId/mcp',
+        destination: '/index/mcp',
+        permanent: false,
+      },
     ];
   },
 };

@@ -15,9 +15,9 @@ export type ToolOutcome =
 
 /**
  * `surface` is the base path's first segment — a literal in every route file,
- * so the value set stays closed despite `/index/[indexId]` and
- * `/classify/[configId]` carrying a caller-supplied segment. `scoped` records
- * whether that segment was present.
+ * so the value set stays closed despite `/classify/[configId]` and its
+ * siblings carrying a caller-supplied segment. `scoped` records whether that
+ * segment was present.
  */
 export type UsageSurface = {
   surface: string;
