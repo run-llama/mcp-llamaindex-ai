@@ -66,7 +66,7 @@ describe('uploadFileByUrl', () => {
 
     const result = await client.callTool({
       name: 'uploadFileByUrl',
-      arguments: { url: 'https://example.com/doc.pdf', fileName: 'doc.pdf' },
+      arguments: { url: 'https://93.184.216.34/doc.pdf', fileName: 'doc.pdf' },
     });
 
     // The server fetched this from a URL the caller chose. Handing the body
@@ -82,8 +82,7 @@ describe('uploadFileByUrl', () => {
     ['file:///etc/passwd'],
     ['gopher://internal/'],
     ['data:text/plain;base64,aGk='],
-    ['not a url at all'],
-  ])('refuses %s without fetching it', async (url) => {
+  ])('refuses the scheme %s without fetching it', async (url) => {
     const client = await connect();
 
     const result = await client.callTool({
@@ -95,19 +94,35 @@ describe('uploadFileByUrl', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it('refuses a string that is not a URL at all', async () => {
+    // `url` is a bare z.string(), so this reaches the handler rather than
+    // being rejected by the schema. Asserted on the refusal rather than its
+    // wording: which layer catches it is an implementation detail.
+    const client = await connect();
+
+    const result = await client.callTool({
+      name: 'uploadFileByUrl',
+      arguments: { url: 'not a url at all', fileName: 'doc.pdf' },
+    });
+
+    expect((result as { isError?: boolean }).isError).toBe(true);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('still downloads an ordinary https URL', async () => {
     mockFetch.mockResolvedValue(new Response('bytes', { status: 200 }));
     const client = await connect();
 
     await client.callTool({
       name: 'uploadFileByUrl',
-      arguments: { url: 'https://example.com/doc.pdf', fileName: 'doc.pdf' },
+      arguments: { url: 'https://93.184.216.34/doc.pdf', fileName: 'doc.pdf' },
     });
 
-    // Asserted by argument rather than by count: past this point the tool goes
-    // on to upload what it fetched, and that makes calls of its own.
-    expect(mockFetch).toHaveBeenCalledWith('https://example.com/doc.pdf', {
-      method: 'GET',
-    });
+    // Asserted by target rather than by count: past this point the tool goes on
+    // to upload what it fetched, and that makes calls of its own. Compared as a
+    // string so it holds whether the caller passes the URL or a URL object.
+    expect(String(mockFetch.mock.calls[0]?.[0])).toBe(
+      'https://93.184.216.34/doc.pdf'
+    );
   });
 });
