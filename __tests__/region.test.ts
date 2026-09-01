@@ -397,3 +397,67 @@ describe('region', () => {
     });
   });
 });
+
+describe('a self-hosted LlamaCloud host', () => {
+  const env = process.env;
+  beforeEach(() => {
+    process.env = { ...env };
+    // Explicit rather than inherited: a sibling file that ran first in this
+    // worker may have left api_key set, which would put the cases above on the
+    // self-hosted branch and pass where they must throw.
+    delete process.env.MCP_AUTH_MODE;
+  });
+  afterEach(() => {
+    process.env = env;
+  });
+
+  function resolve() {
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('../lib/region');
+  }
+
+  it('is accepted in api_key mode with a declared region', () => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL =
+      'https://llamacloud.internal.example.com';
+
+    expect(resolve().llamaCloudBaseUrl()).toBe(
+      'https://llamacloud.internal.example.com'
+    );
+  });
+
+  it('is still refused in oauth mode', () => {
+    process.env.MCP_AUTH_MODE = 'oauth';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL =
+      'https://llamacloud.internal.example.com';
+
+    // The hosted deployment has no business talking to someone else's API.
+    expect(() => resolve().llamaCloudBaseUrl()).toThrow(
+      /not a recognised LlamaCloud API/
+    );
+  });
+
+  it('still requires https, which matters more here, not less', () => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL = 'http://llamacloud.internal.example.com';
+
+    expect(() => resolve().llamaCloudBaseUrl()).toThrow(/must use https/);
+  });
+
+  it('still requires the region to be stated', () => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    delete process.env.LLAMA_CLOUD_REGION;
+    process.env.LLAMA_CLOUD_BASE_URL =
+      'https://llamacloud.internal.example.com';
+
+    // regionProfile()/siblingProfile() pick the wrong-region wording in
+    // token-errors.ts, and an unknown host implies nothing about placement.
+    expect(() => resolve().llamaCloudBaseUrl()).toThrow(
+      /LLAMA_CLOUD_REGION must state the region/
+    );
+  });
+});

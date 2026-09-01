@@ -229,6 +229,53 @@ Connect your MCP client to the production endpoint:
 claude mcp add --transport http llamaparse https://<your-deployment>.vercel.app/mcp
 ```
 
+## Self-hosting against your own LlamaCloud
+
+The hosted server authenticates through WorkOS AuthKit, which a BYOC or
+self-hosted deployment cannot use: its users exist in the customer's own
+LlamaCloud, not in our WorkOS directory. Setting `MCP_AUTH_MODE=api_key` runs
+the server on LlamaCloud API keys alone.
+
+```bash
+MCP_AUTH_MODE=api_key
+LLAMA_CLOUD_REGION=na                                  # or eu
+LLAMA_CLOUD_BASE_URL=https://llamacloud.internal.example.com
+REDIS_URI=redis://...
+```
+
+No `WORKOS_*` variable is required. (The AuthKit package is still imported and
+reads a few at load, defaulting to empty; nothing in this mode depends on
+them.) Callers authenticate by sending a LlamaCloud API key as the bearer
+token:
+
+```bash
+claude mcp add --transport http llamacloud https://<your-deployment>/mcp \
+  --header "Authorization: Bearer llx-..."
+```
+
+What changes in this mode:
+
+- The OAuth discovery documents under `/.well-known/` return **404**, because
+  there is no authorization server for a client to complete a flow against.
+- A JWT is refused with a plain 401 naming the credential this deployment
+  takes, rather than a challenge pointing at those withdrawn documents.
+- `getUploadUrl` is unavailable to API-key callers on any deployment — it
+  stores the caller's credential so the upload route can spend it, which is
+  bounded for an expiring token and not for a key. Use `uploadFileByUrl`.
+- `LLAMA_CLOUD_BASE_URL` may name your own host. It must be `https`, since it
+  carries the API key and the document contents. `LLAMA_CLOUD_REGION` is still
+  required so the deployment states what it serves rather than inheriting `na`
+  by default; it does not affect routing, because the base URL is explicit.
+- The EU compute pin is not applied. It exists to hold our own residency
+  commitment, and a self-hosted deployment runs wherever you put it.
+
+`MCP_AUTH_MODE` is deliberately explicit and never inferred from a missing
+`WORKOS_CLIENT_ID`, so a variable dropped from the hosted configuration fails
+at boot instead of silently downgrading it to API keys only.
+
+Tool authorization still reflects the caller's own LlamaCloud permissions, and
+the API enforces them — this server does not add a permission layer of its own.
+
 ## Development
 
 ```bash
