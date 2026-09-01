@@ -2,6 +2,10 @@
  * @jest-environment node
  */
 
+// Module scope, not script scope: a second test file declaring the same
+// top-level names would otherwise collide with this one in the global scope.
+export {};
+
 /**
  * The sibling test mocks the adapter to drive the verifier directly. This one
  * runs the real `experimental_withMcpAuth`, because the seam that carries an
@@ -14,7 +18,11 @@
  * Only the MCP server underneath and the network are faked.
  */
 
-const innerHandler = jest.fn(async () => new Response('tool ran'));
+// Typed through the generic rather than a named parameter, so `mock.calls`
+// carries a Request without declaring an argument the body never reads.
+const innerHandler = jest.fn<Promise<Response>, [Request]>(
+  async () => new Response('tool ran')
+);
 jest.mock('@vercel/mcp-adapter', () => {
   const actual = jest.requireActual('@vercel/mcp-adapter');
   return { ...actual, createMcpHandler: () => innerHandler };
@@ -73,7 +81,7 @@ describe('an accepted key through the real adapter', () => {
     // The adapter sets `auth` on the request before dispatching, so this is the
     // shape a tool sees. `user` must be populated or ensureUserAuthenticated
     // rejects every call on the server.
-    const dispatched = innerHandler.mock.calls[0][0] as Request & {
+    const dispatched = innerHandler.mock.calls[0]![0] as Request & {
       auth?: { extra?: { user?: { id: string }; credential?: string } };
     };
     expect(dispatched.auth?.extra?.user?.id).toMatch(/^apikey:[0-9a-f]{32}$/);
@@ -103,7 +111,7 @@ describe('the OAuth path through the real adapter', () => {
 
     expect(response.status).toBe(200);
     expect(mockProjectsList).not.toHaveBeenCalled();
-    const dispatched = innerHandler.mock.calls[0][0] as Request & {
+    const dispatched = innerHandler.mock.calls[0]![0] as Request & {
       auth?: { extra?: { user?: { id: string }; credential?: string } };
     };
     expect(dispatched.auth?.extra?.user?.id).toBe('user_01XYZ');

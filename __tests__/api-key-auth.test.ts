@@ -2,6 +2,10 @@
  * @jest-environment node
  */
 
+// Module scope, not script scope: a second test file declaring the same
+// top-level names would otherwise collide with this one in the global scope.
+export {};
+
 // Captures both halves of what buildMcpRouteHandler produces: the verifier it
 // hands the adapter, and the wrapped handler the API-key branch delegates to.
 let verifyToken: (
