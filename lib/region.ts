@@ -1,5 +1,6 @@
 import 'server-only';
 import { isLoopbackHostname, normalizeBaseUrl } from './urls';
+import { authMode } from './auth/mode';
 
 export type Region = 'na' | 'eu';
 
@@ -174,8 +175,28 @@ function resolveRegionConfig(): { region: Region; baseUrl: string } {
     return { region: declared, baseUrl };
   }
 
+  // A self-hosted deployment points at the customer's own LlamaCloud, which is
+  // by definition not one of ours. The region still has to be stated: it picks
+  // the wrong-region wording in lib/auth/token-errors.ts, and an unknown host
+  // implies nothing about where the deployment sits.
+  if (authMode() === 'api_key') {
+    if (!declared) {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_BASE_URL points at "${hostname}", which is not a known region API, so LLAMA_CLOUD_REGION must state the region this deployment serves.`
+      );
+    }
+    // Unchanged from the region hosts above, and it matters more here, not
+    // less: this URL carries the API key and the document contents.
+    if (url.protocol !== 'https:') {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_BASE_URL must use https for "${hostname}" — "${url.protocol}" would send the API key and document contents in cleartext.`
+      );
+    }
+    return { region: declared, baseUrl };
+  }
+
   throw new RegionConfigError(
-    `LLAMA_CLOUD_BASE_URL host "${hostname}" is not a recognised LlamaCloud API. Allowed: ${API_HOSTNAMES.map((e) => e.hostname).join(', ')}, or a loopback host for local development.`
+    `LLAMA_CLOUD_BASE_URL host "${hostname}" is not a recognised LlamaCloud API. Allowed: ${API_HOSTNAMES.map((e) => e.hostname).join(', ')}, or a loopback host for local development. Set MCP_AUTH_MODE=api_key with LLAMA_CLOUD_REGION to point at a self-hosted LlamaCloud.`
   );
 }
 

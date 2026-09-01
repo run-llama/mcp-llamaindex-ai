@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { authkitOrigin } from '@/lib/authkit';
 import { getLogger } from '@/lib/observability/logger';
+import { isOAuthEnabled } from '@/lib/auth/mode';
 
 const UPSTREAM_TIMEOUT_MS = 5000;
 
 export async function GET() {
+  // Nothing to proxy in api_key mode: there is no AuthKit domain configured,
+  // and no flow for a client to discover.
+  if (!isOAuthEnabled()) {
+    return NextResponse.json(null, { status: 404 });
+  }
+
   // Outside the try: a bad WORKOS_AUTHKIT_DOMAIN is permanent, and answering
   // 502 would have clients retry it forever. Let it surface as a 500, which is
   // what the sibling protected-resource route does with the same failure.

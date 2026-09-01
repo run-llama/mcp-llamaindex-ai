@@ -20,10 +20,15 @@ import {
   surfaceFromBasePath,
 } from '@/lib/observability/usage';
 import type { McpServer } from '@/lib/mcp/tools/tools';
+import { isOAuthEnabled } from '@/lib/auth/mode';
 
+const oauthEnabled = isOAuthEnabled();
 const clientId = process.env.WORKOS_CLIENT_ID;
 
-if (!clientId) {
+// Still fatal at boot, but only where OAuth is actually served. A self-hosted
+// deployment has no WorkOS directory to point at, so requiring the variable
+// there would make the mode unusable rather than safe.
+if (oauthEnabled && !clientId) {
   throw new Error('WORKOS_CLIENT_ID environment variable not set');
 }
 
@@ -84,9 +89,11 @@ async function limitUnvalidatedKey(request: Request): Promise<Response | null> {
   }
 }
 
-// Fetch the JWKS from WorkOS (shared across handlers)
-const jwksUrl = new URL(`https://api.workos.com/sso/jwks/${clientId}`);
-const JWKS = createRemoteJWKSet(jwksUrl);
+// Fetch the JWKS from WorkOS (shared across handlers). Absent in api_key mode,
+// where there is no WorkOS environment and no JWT will ever be accepted.
+const JWKS = oauthEnabled
+  ? createRemoteJWKSet(new URL(`https://api.workos.com/sso/jwks/${clientId}`))
+  : undefined;
 
 /**
  * Requests whose API key this server has already checked, carrying the
@@ -114,12 +121,9 @@ function bearerToken(request: Request): string | undefined {
  * and cannot complete headlessly. The status still says re-authenticate; only
  * the instruction to do it via OAuth is dropped.
  */
-function invalidApiKeyResponse(): Response {
+function unauthorized(description: string): Response {
   return new Response(
-    JSON.stringify({
-      error: 'invalid_token',
-      error_description: 'Invalid API key.',
-    }),
+    JSON.stringify({ error: 'invalid_token', error_description: description }),
     { status: 401, headers: { 'Content-Type': 'application/json' } }
   );
 }
@@ -178,7 +182,10 @@ export function buildMcpRouteHandler(
         const limiterResponse = await applyRateLimit(request);
         return {
           token,
-          clientId: clientId!,
+          // No OAuth client is involved in an API-key call, and in api_key
+          // mode there is none configured. The adapter's type requires
+          // the field, so it names the credential kind instead.
+          clientId: clientId ?? 'api-key',
           scopes: [],
           extra: {
             user: { id: fingerprint },
@@ -188,6 +195,17 @@ export function buildMcpRouteHandler(
             credential: 'api_key',
           } satisfies WorkOSAuthInfo,
         };
+      }
+
+      if (!JWKS) {
+        // Unreachable in practice: api_key mode turns a JWT away before the
+        // wrapper is called. Kept because it is what makes JWKS non-optional
+        // for jwtVerify below, and a 500 from an absent key set would be a
+        // worse answer than this if a future path ever did reach here.
+        logger.error('A JWT was presented to an API-key-only deployment');
+        throw new InvalidTokenError(
+          'This deployment accepts LlamaCloud API keys only. Send one as the bearer token.'
+        );
       }
 
       // Only a fault in the token itself becomes a 401. Everything else here is
@@ -254,6 +272,18 @@ export function buildMcpRouteHandler(
   // wrapper does the dispatch exactly as it does for a JWT.
   return async (request: Request) => {
     const token = bearerToken(request);
+
+    // In api_key mode the challenge would name a discovery document this
+    // deployment answers with a 404, so a JWT is turned away here rather than
+    // by the verifier — the adapter attaches that pointer to every 401 it
+    // builds, and pointing a client at a document that does not exist is worse
+    // than telling it plainly what this server takes.
+    if (!oauthEnabled && token !== undefined && !isApiKeyToken(token)) {
+      return unauthorized(
+        'This deployment accepts LlamaCloud API keys only. Send one as the bearer token.'
+      );
+    }
+
     if (token === undefined || !isApiKeyToken(token)) {
       return authenticated(request);
     }
@@ -282,7 +312,7 @@ export function buildMcpRouteHandler(
       );
     }
     if (!valid) {
-      return invalidApiKeyResponse();
+      return unauthorized('Invalid API key.');
     }
 
     validatedApiKeys.set(request, apiKeyFingerprint(token));
