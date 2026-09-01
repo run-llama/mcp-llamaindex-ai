@@ -21,6 +21,15 @@ export const ensureUserAuthenticated = (
   return workosAuth.user;
 };
 
+/**
+ * Whether the caller authenticated with an API key rather than OAuth.
+ *
+ * A credential recorded before this field existed reads as OAuth, which is what
+ * it was — only the API-key path ever sets it.
+ */
+export const isApiKeyCaller = (authInfo: AuthInfo | undefined): boolean =>
+  (authInfo?.extra as WorkOSAuthInfo | undefined)?.credential === 'api_key';
+
 // Helper to check if request is authenticated (for optional auth tools)
 export const isAuthenticated = (authInfo: AuthInfo | undefined): boolean => {
   if (!authInfo?.extra) {

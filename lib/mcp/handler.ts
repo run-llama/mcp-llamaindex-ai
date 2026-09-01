@@ -10,6 +10,11 @@ import { getLogger } from '@/lib/observability/logger';
 import { extractRateLimitFromResponse } from '@/lib/auth/helpers';
 import { invalidTokenError } from '@/lib/auth/token-errors';
 import {
+  apiKeyFingerprint,
+  isApiKeyToken,
+  validateApiKey,
+} from '@/lib/auth/api-key';
+import {
   instrumentToolUsage,
   surfaceFromBasePath,
 } from '@/lib/observability/usage';
@@ -49,6 +54,42 @@ async function applyRateLimit(request: Request): Promise<Response | null> {
 const jwksUrl = new URL(`https://api.workos.com/sso/jwks/${clientId}`);
 const JWKS = createRemoteJWKSet(jwksUrl);
 
+/**
+ * Requests whose API key this server has already checked, carrying the
+ * fingerprint the verifier needs.
+ *
+ * Keyed by the request object rather than the token: two requests presenting
+ * the same key are still two requests, and a token-keyed entry would let them
+ * race. A `WeakMap` also needs no eviction — the entry dies with the request.
+ */
+const validatedApiKeys = new WeakMap<Request, string>();
+
+/** The bearer, parsed the way `experimental_withMcpAuth` parses it. */
+function bearerToken(request: Request): string | undefined {
+  const [scheme, token] =
+    request.headers.get('Authorization')?.split(' ') ?? [];
+  return scheme?.toLowerCase() === 'bearer' ? token : undefined;
+}
+
+/**
+ * Deliberately without `WWW-Authenticate`.
+ *
+ * The adapter answers a rejected token with a Bearer challenge pointing at
+ * OAuth discovery, which is right for a bad JWT and wrong here: a caller who
+ * presented an API key would be sent into a sign-in flow they did not ask for
+ * and cannot complete headlessly. The status still says re-authenticate; only
+ * the instruction to do it via OAuth is dropped.
+ */
+function invalidApiKeyResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      error: 'invalid_token',
+      error_description: 'Invalid API key.',
+    }),
+    { status: 401, headers: { 'Content-Type': 'application/json' } }
+  );
+}
+
 type McpServerInfo = {
   instructions: string;
   serverInfo: {
@@ -84,13 +125,35 @@ export function buildMcpRouteHandler(
     { basePath }
   );
 
-  return experimental_withMcpAuth(
+  const authenticated = experimental_withMcpAuth(
     handler,
     async (request, token) => {
       const logger = getLogger();
       if (!token) {
         logger.error('Undefined token');
         return undefined;
+      }
+
+      // Already checked against LlamaCloud by the branch this handler is
+      // wrapped in, so there is nothing to verify here and no JWKS to fetch.
+      // The headers and the limiter are still applied from inside the verifier,
+      // where the OAuth path applies them too.
+      const fingerprint = validatedApiKeys.get(request);
+      if (fingerprint !== undefined) {
+        request.headers.set('x-user-id', fingerprint);
+        const limiterResponse = await applyRateLimit(request);
+        return {
+          token,
+          clientId: clientId!,
+          scopes: [],
+          extra: {
+            user: { id: fingerprint },
+            // An API key carries no claims. Tools read `user`, never this.
+            claims: {},
+            rateLimit: extractRateLimitFromResponse(limiterResponse),
+            credential: 'api_key',
+          } satisfies WorkOSAuthInfo,
+        };
       }
 
       // Only a fault in the token itself becomes a 401. Everything else here is
@@ -139,6 +202,7 @@ export function buildMcpRouteHandler(
           user: { id: payload.sub },
           claims: payload,
           rateLimit: extractRateLimitFromResponse(limiterResponse),
+          credential: 'oauth',
         } satisfies WorkOSAuthInfo,
       };
     },
@@ -146,4 +210,38 @@ export function buildMcpRouteHandler(
       required: false,
     }
   );
+
+  // API keys are checked here rather than inside the verifier because a
+  // rejection has to be answered without the adapter's OAuth challenge, and the
+  // adapter hardcodes that header on every 401 it produces. Dispatching the
+  // unwrapped handler ourselves is not an option either: `withAuthContext`, the
+  // function that makes `authInfo` reachable from a tool, is internal to the
+  // adapter and not exported. So a good key is recorded and handed on, and the
+  // wrapper does the dispatch exactly as it does for a JWT.
+  return async (request: Request) => {
+    const token = bearerToken(request);
+    if (token === undefined || !isApiKeyToken(token)) {
+      return authenticated(request);
+    }
+
+    let valid: boolean;
+    try {
+      valid = await validateApiKey(token);
+    } catch {
+      // LlamaCloud is unreachable, not the key's fault. Already logged.
+      return new Response(
+        JSON.stringify({
+          error: 'server_error',
+          error_description: 'Could not verify the API key. Try again.',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!valid) {
+      return invalidApiKeyResponse();
+    }
+
+    validatedApiKeys.set(request, apiKeyFingerprint(token));
+    return authenticated(request);
+  };
 }
