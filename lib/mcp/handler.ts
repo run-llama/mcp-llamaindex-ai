@@ -11,6 +11,7 @@ import { extractRateLimitFromResponse } from '@/lib/auth/helpers';
 import { invalidTokenError } from '@/lib/auth/token-errors';
 import {
   apiKeyFingerprint,
+  cachedApiKeyVerdict,
   isApiKeyToken,
   validateApiKey,
 } from '@/lib/auth/api-key';
@@ -47,6 +48,39 @@ async function applyRateLimit(request: Request): Promise<Response | null> {
       status: 429,
       headers: { 'Retry-After': String(retryAfter) },
     });
+  }
+}
+
+/**
+ * Guards the outbound call an unrecognised API key triggers.
+ *
+ * Separate from the limiter above, and keyed by source address rather than by
+ * caller: at this point the key has not been checked, so there is no identity
+ * to trust, and keying on the key itself would give a caller cycling random
+ * keys a fresh budget every request — which is the traffic this exists to stop.
+ *
+ * Deliberately loose. A fleet coming online behind one corporate egress pays
+ * one miss per key before its cache warms, and throttling that would break the
+ * deployment this feature is for. It caps what a single source can amplify into
+ * LlamaCloud's auth path; a caller spread across many addresses is not stopped
+ * here, and wants an upstream budget rather than a per-instance one.
+ */
+const unvalidatedKeyLimiter = new RateLimiterMemory({
+  points: 300,
+  duration: 60,
+});
+
+async function limitUnvalidatedKey(request: Request): Promise<Response | null> {
+  const key = request.headers.get('x-forwarded-for') || '127.0.0.1';
+  try {
+    await unvalidatedKeyLimiter.consume(key);
+    return null;
+  } catch (res) {
+    const retryAfter = Math.ceil((res as RateLimiterRes).msBeforeNext / 1000);
+    return new Response(
+      'Too many unverified API keys from this address. Try again later.',
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+    );
   }
 }
 
@@ -222,6 +256,16 @@ export function buildMcpRouteHandler(
     const token = bearerToken(request);
     if (token === undefined || !isApiKeyToken(token)) {
       return authenticated(request);
+    }
+
+    // Only an unrecognised key reaches LlamaCloud, so only that case is worth
+    // limiting; a caller whose key is already cached is not costing anything
+    // and is metered per-key inside the verifier like everyone else.
+    if (cachedApiKeyVerdict(token) === undefined) {
+      const limited = await limitUnvalidatedKey(request);
+      if (limited) {
+        return limited;
+      }
     }
 
     let valid: boolean;

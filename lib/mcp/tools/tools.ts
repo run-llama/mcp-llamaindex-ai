@@ -107,7 +107,7 @@ function jsonResult(value: unknown): ToolTextResponse {
 export function registerGetUploadUrlTool(server: McpServer) {
   server.tool(
     'getUploadUrl',
-    'Get a pre-signed URL to upload a file to the LlamaParse S3 storage',
+    'Get a pre-signed URL to upload a file to the LlamaParse S3 storage. Not available when authenticating with an API key — use uploadFileByUrl instead.',
     {
       purpose: z
         .string()

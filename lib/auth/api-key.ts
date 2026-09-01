@@ -42,6 +42,13 @@ type CacheEntry = { valid: boolean; expiresAt: number };
 
 const cache = new Map<string, CacheEntry>();
 
+/**
+ * Validations already in flight, so a burst of concurrent calls on one key
+ * costs one round-trip rather than one each. A session opening several tools at
+ * once against a cold cache is the ordinary case, not an edge one.
+ */
+const inFlight = new Map<string, Promise<boolean>>();
+
 function readCache(key: string): CacheEntry | undefined {
   const entry = cache.get(key);
   if (!entry) {
@@ -71,6 +78,17 @@ function writeCache(key: string, valid: boolean): void {
 /** Exposed for tests; a warm instance otherwise carries entries between them. */
 export function clearApiKeyCache(): void {
   cache.clear();
+  inFlight.clear();
+}
+
+/**
+ * The cached verdict, or `undefined` when answering would take a round-trip.
+ *
+ * Callers use this to tell the two costs apart: a cached answer is free, and an
+ * uncached one reaches LlamaCloud on this server's behalf and is worth guarding.
+ */
+export function cachedApiKeyVerdict(token: string): boolean | undefined {
+  return readCache(apiKeyFingerprint(token))?.valid;
 }
 
 /**
@@ -97,6 +115,17 @@ export async function validateApiKey(token: string): Promise<boolean> {
     return cached.valid;
   }
 
+  const pending = inFlight.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  const attempt = askLlamaCloud(token, key).finally(() => inFlight.delete(key));
+  inFlight.set(key, attempt);
+  return attempt;
+}
+
+async function askLlamaCloud(token: string, key: string): Promise<boolean> {
   try {
     await llamaCloudClient(token).projects.list(undefined, {
       timeout: VALIDATION_TIMEOUT_MS,
@@ -106,9 +135,17 @@ export async function validateApiKey(token: string): Promise<boolean> {
     return true;
   } catch (error: unknown) {
     const status = (error as { status?: number }).status;
-    if (status === 401 || status === 403) {
+    if (status === 401) {
       writeCache(key, false);
       return false;
+    }
+    // 403 means LlamaCloud recognised the credential and declined the action,
+    // which is proof the key authenticates. Treating it as a bad key would let
+    // any permission gate on this one route lock a valid key out of every MCP
+    // surface for the whole cache window.
+    if (status === 403) {
+      writeCache(key, true);
+      return true;
     }
     getLogger().error(
       `Could not reach LlamaCloud to validate an API key: ${error}`

@@ -126,6 +126,22 @@ describe('an accepted API key', () => {
     expect((await verifyToken(first, KEY))?.extra).toBeDefined();
     expect((await verifyToken(second, KEY))?.extra).toBeDefined();
   });
+
+  it('coalesces a concurrent burst into one round-trip', async () => {
+    mockProjectsList.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve([]), 5))
+    );
+
+    await Promise.all([
+      handler(requestWith(KEY)),
+      handler(requestWith(KEY)),
+      handler(requestWith(KEY)),
+    ]);
+
+    // A session opening several tools at once against a cold cache is ordinary,
+    // and without coalescing each one pays its own validation.
+    expect(mockProjectsList).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('a rejected API key', () => {
@@ -141,10 +157,13 @@ describe('a rejected API key', () => {
     expect(wrapped).not.toHaveBeenCalled();
   });
 
-  it('treats a forbidden key the same as an unauthorized one', async () => {
+  it('accepts a key LlamaCloud recognises but declines', async () => {
     mockProjectsList.mockRejectedValue(httpError(403));
 
-    expect((await handler(requestWith(KEY))).status).toBe(401);
+    // 403 means the credential authenticated and the action was refused, so the
+    // key is good. Reading it as a bad key would let a permission gate on this
+    // one route lock a valid key out of every surface for the cache window.
+    expect((await handler(requestWith(KEY))).status).toBe(200);
   });
 
   it('reports a LlamaCloud outage as a server fault, not a bad key', async () => {
@@ -167,6 +186,29 @@ describe('a rejected API key', () => {
 
     expect(second.status).toBe(200);
     expect(mockProjectsList).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the guard on unverified keys', () => {
+  it('refuses a flood of unrecognised keys from one address', async () => {
+    mockProjectsList.mockRejectedValue(httpError(401));
+    const statuses: number[] = [];
+
+    // Each distinct key misses the cache, so each would otherwise cost one
+    // outbound call to LlamaCloud's auth path from this server's identity.
+    for (let i = 0; i < 320; i++) {
+      const req = new Request('https://mcp.llamaindex.ai/parse/mcp', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer llx-flood${i}`,
+          'x-forwarded-for': '203.0.113.9',
+        },
+      });
+      statuses.push((await handler(req)).status);
+    }
+
+    expect(statuses).toContain(429);
+    expect(mockProjectsList.mock.calls.length).toBeLessThan(320);
   });
 });
 

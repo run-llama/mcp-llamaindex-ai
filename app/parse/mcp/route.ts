@@ -28,6 +28,7 @@ const authHandler = buildMcpRouteHandler(
     instructions:
       'LlamaParse MCP server for converting documents (PDFs, Office files, images, etc.) into ' +
       'structured text/markdown. Typical flow: (1) call getUploadUrl to obtain a signed upload URL, ' +
+      'or uploadFileByUrl, which is the only upload route open to an API key, ' +
       '(2) POST your file to that URL (or call uploadFileByUrl to have the server fetch it for you), ' +
       '(3) call parseFile with the returned file id to run LlamaParse. Use getUserProjects to pick ' +
       'a target project when needed.',
