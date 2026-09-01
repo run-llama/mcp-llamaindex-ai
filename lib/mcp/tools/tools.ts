@@ -254,22 +254,39 @@ export function registerUploadFileByUrlTool(server: McpServer) {
         ensureUserAuthenticated(authInfo);
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
-        const response = await fetch(args.url, { method: 'GET' });
-        logger.debug(`Downloading ${args.url}`);
-        if (!response.ok) {
-          const details = await response.text();
-          logger.error(
-            `It was not possible to download the file. Response returned with status ${response.status}: ${details}`
+        // The server fetches this on the caller's behalf, so a scheme that is
+        // not http(s) asks it to read something that was never a download —
+        // file:// most obviously.
+        const scheme = URL.canParse(args.url)
+          ? new URL(args.url).protocol
+          : undefined;
+        if (scheme !== 'http:' && scheme !== 'https:') {
+          const message =
+            'Only http and https URLs can be downloaded. Provide a URL this server can reach over the web.';
+          logger.warn(
+            `Refused a non-http URL for upload: ${scheme ?? 'unparseable'}`
           );
           span.setAttribute('tool.error', true);
           span.end();
           return {
-            content: [
-              {
-                type: 'text',
-                text: `It was not possible to download the file. Response returned with status ${response.status}: ${details}`,
-              },
-            ],
+            content: [{ type: 'text', text: message }],
+            isError: true,
+          } as ToolErrorResponse;
+        }
+        const response = await fetch(args.url, { method: 'GET' });
+        logger.debug(`Downloading ${args.url}`);
+        if (!response.ok) {
+          // The body is deliberately neither returned nor logged. This server
+          // fetched it from a URL the caller chose, so echoing it back hands
+          // the caller whatever the server could reach, and logging it puts the
+          // same content in our observability pipeline. The status is the part
+          // that actually diagnoses a failed download.
+          const message = `It was not possible to download the file. Response returned with status ${response.status}.`;
+          logger.error(message);
+          span.setAttribute('tool.error', true);
+          span.end();
+          return {
+            content: [{ type: 'text', text: message }],
             isError: true,
           } as ToolErrorResponse;
         }
