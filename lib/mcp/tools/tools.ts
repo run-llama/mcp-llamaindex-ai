@@ -41,6 +41,7 @@ import { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import z from 'zod';
 import { randomBytes } from 'node:crypto';
 import { getKVStore } from '@/lib/business/kv';
+import { BlockedUrlError, fetchRemoteFile } from '@/lib/business/remote-fetch';
 import { isComplex, litParse } from '@/lib/business/liteparse';
 
 const tracer = trace.getTracer('mcp-tools');
@@ -254,26 +255,24 @@ export function registerUploadFileByUrlTool(server: McpServer) {
         ensureUserAuthenticated(authInfo);
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
-        // The server fetches this on the caller's behalf, so a scheme that is
-        // not http(s) asks it to read something that was never a download —
-        // file:// most obviously.
-        const scheme = URL.canParse(args.url)
-          ? new URL(args.url).protocol
-          : undefined;
-        if (scheme !== 'http:' && scheme !== 'https:') {
-          const message =
-            'Only http and https URLs can be downloaded. Provide a URL this server can reach over the web.';
-          logger.warn(
-            `Refused a non-http URL for upload: ${scheme ?? 'unparseable'}`
-          );
+        let response: Response;
+        try {
+          response = await fetchRemoteFile(args.url);
+        } catch (e) {
+          if (e instanceof BlockedUrlError) {
+            logger.warn(`Refused to fetch a caller-supplied URL: ${e.message}`);
+            span.setAttribute('tool.blocked_url', true);
+            span.end();
+            return {
+              content: [{ type: 'text', text: e.message }],
+              isError: true,
+            } as ToolErrorResponse;
+          }
+          logger.error(`An error occurred while downloading file by URL: ${e}`);
           span.setAttribute('tool.error', true);
           span.end();
-          return {
-            content: [{ type: 'text', text: message }],
-            isError: true,
-          } as ToolErrorResponse;
+          throw e;
         }
-        const response = await fetch(args.url, { method: 'GET' });
         logger.debug(`Downloading ${args.url}`);
         if (!response.ok) {
           // The body is deliberately neither returned nor logged. This server

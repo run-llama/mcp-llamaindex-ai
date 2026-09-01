@@ -276,6 +276,32 @@ at boot instead of silently downgrading it to API keys only.
 Tool authorization still reflects the caller's own LlamaCloud permissions, and
 the API enforces them — this server does not add a permission layer of its own.
 
+### Fetching documents from inside your network
+
+The guard below is on by default on every deployment, hosted included; the
+opt-out exists for self-hosted ones, which is why it is documented here.
+
+`uploadFileByUrl` has the server download a URL the caller supplied, so it can
+reach whatever the server can. By default it refuses any URL resolving to a
+loopback, link-local, RFC1918, carrier-grade-NAT or otherwise non-routable
+address — including `169.254.169.254`, and including a public URL that redirects
+to one.
+
+A deployment whose documents genuinely live on an internal host can opt out:
+
+```bash
+ALLOW_PRIVATE_UPLOAD_HOSTS=true
+```
+
+Only the exact string `true` counts. Turning it on means any caller who can
+reach this MCP server can have it fetch from your internal network and return
+what it finds, so scope it the way you would scope an outbound proxy.
+
+One limit worth knowing: the check resolves the hostname and then connects, so a
+caller who controls DNS for their own domain can answer the check with a public
+address and the connection with a private one. Closing that needs the resolved
+address pinned onto the socket, which the platform's `fetch` does not expose.
+
 ## Development
 
 ```bash
