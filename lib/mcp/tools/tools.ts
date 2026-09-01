@@ -268,6 +268,9 @@ export function registerUploadFileByUrlTool(server: McpServer) {
               isError: true,
             } as ToolErrorResponse;
           }
+          logger.error(`An error occurred while downloading file by URL: ${e}`);
+          span.setAttribute('tool.error', true);
+          span.end();
           throw e;
         }
         logger.debug(`Downloading ${args.url}`);

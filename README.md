@@ -269,7 +269,17 @@ What changes in this mode:
 - The EU compute pin is not applied. It exists to hold our own residency
   commitment, and a self-hosted deployment runs wherever you put it.
 
+`MCP_AUTH_MODE` is deliberately explicit and never inferred from a missing
+`WORKOS_CLIENT_ID`, so a variable dropped from the hosted configuration fails
+at boot instead of silently downgrading it to API keys only.
+
+Tool authorization still reflects the caller's own LlamaCloud permissions, and
+the API enforces them — this server does not add a permission layer of its own.
+
 ### Fetching documents from inside your network
+
+The guard below is on by default on every deployment, hosted included; the
+opt-out exists for self-hosted ones, which is why it is documented here.
 
 `uploadFileByUrl` has the server download a URL the caller supplied, so it can
 reach whatever the server can. By default it refuses any URL resolving to a
@@ -291,13 +301,6 @@ One limit worth knowing: the check resolves the hostname and then connects, so a
 caller who controls DNS for their own domain can answer the check with a public
 address and the connection with a private one. Closing that needs the resolved
 address pinned onto the socket, which the platform's `fetch` does not expose.
-
-`MCP_AUTH_MODE` is deliberately explicit and never inferred from a missing
-`WORKOS_CLIENT_ID`, so a variable dropped from the hosted configuration fails
-at boot instead of silently downgrading it to API keys only.
-
-Tool authorization still reflects the caller's own LlamaCloud permissions, and
-the API enforces them — this server does not add a permission layer of its own.
 
 ## Development
 

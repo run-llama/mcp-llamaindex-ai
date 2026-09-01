@@ -64,6 +64,16 @@ describe('isBlockedAddress', () => {
     ['fd00::1', 'IPv6 unique-local'],
     ['fe80::1', 'IPv6 link-local'],
     ['::ffff:169.254.169.254', 'IPv4-mapped metadata'],
+    // The same address as the line above, in the spelling `URL` produces.
+    ['::ffff:a9fe:a9fe', 'IPv4-mapped metadata, hex groups'],
+    ['0:0:0:0:0:ffff:169.254.169.254', 'IPv4-mapped metadata, uncompressed'],
+    ['::ffff:7f00:1', 'IPv4-mapped loopback, hex groups'],
+    ['::169.254.169.254', 'IPv4-compatible metadata'],
+    ['64:ff9b::169.254.169.254', 'NAT64 metadata'],
+    ['2002:a9fe:a9fe::1', '6to4 via a link-local gateway'],
+    ['0:0:0:0:0:0:0:1', 'IPv6 loopback, uncompressed'],
+    ['::', 'unspecified'],
+    ['ff02::1', 'multicast'],
   ])('blocks %s (%s)', (address) => {
     expect(isBlockedAddress(address)).toBe(true);
   });
@@ -73,6 +83,9 @@ describe('isBlockedAddress', () => {
     ['172.32.0.1'], // just outside RFC1918
     ['100.128.0.1'], // just outside CGNAT
     ['2606:4700::1111'],
+    ['fc::1'], // 00fc::1, not fc00::/7 — a short group is not a short prefix
+    ['::ffff:8.8.8.8'], // mapped, but mapped onto a public address
+    ['2002:0808:0808::1'], // 6to4 via a public gateway
   ])('allows the public address %s', (address) => {
     expect(isBlockedAddress(address)).toBe(false);
   });
@@ -186,5 +199,44 @@ describe('fetchRemoteFile', () => {
     await expect(
       fetchRemoteFile('https://nope.internal/doc.pdf')
     ).rejects.toThrow(/Could not resolve/);
+  });
+});
+
+describe('the spelling the URL parser produces', () => {
+  // The bug this covers: `new URL('http://[0:0:0:0:0:ffff:169.254.169.254]/')`
+  // hands back the hostname `[::ffff:a9fe:a9fe]` — hex groups, no dots. A check
+  // written against the dotted form misses the address it exists to catch, so
+  // these go through `new URL` rather than asserting on literals a human typed.
+  function hostnameOf(url: string): string {
+    return new URL(url).hostname.replace(/^\[|\]$/g, '');
+  }
+
+  it.each([
+    [
+      'http://[0:0:0:0:0:ffff:169.254.169.254]/',
+      'uncompressed mapped metadata',
+    ],
+    ['http://[::ffff:169.254.169.254]/', 'dotted mapped metadata'],
+    ['http://[::ffff:a9fe:a9fe]/', 'hex mapped metadata'],
+    ['http://[::ffff:7f00:1]/', 'hex mapped loopback'],
+    ['http://[0:0:0:0:0:0:0:1]/', 'uncompressed loopback'],
+    ['http://[::169.254.169.254]/', 'IPv4-compatible metadata'],
+    ['http://[64:ff9b::169.254.169.254]/', 'NAT64 metadata'],
+    ['http://[2002:a9fe:a9fe::1]/', '6to4 carrying a link-local gateway'],
+    ['http://[ff02::1]/', 'multicast'],
+    ['http://2852039166/', 'decimal IPv4'],
+    ['http://0251.0376.0251.0376/', 'octal IPv4'],
+    ['http://169.254.169.254./', 'trailing dot'],
+  ])('blocks %s (%s)', (url) => {
+    expect(isBlockedAddress(hostnameOf(url))).toBe(true);
+  });
+
+  it.each([
+    ['http://[2606:4700::1111]/', 'public IPv6'],
+    ['http://[fc::1]/', 'global unicast, not fc00::/7'],
+    ['http://[::ffff:8.8.8.8]/', 'a mapped public address'],
+    ['http://8.8.8.8/', 'public IPv4'],
+  ])('allows %s (%s)', (url) => {
+    expect(isBlockedAddress(hostnameOf(url))).toBe(false);
   });
 });

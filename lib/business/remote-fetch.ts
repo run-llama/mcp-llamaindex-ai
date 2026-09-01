@@ -82,17 +82,92 @@ function isBlockedV4(address: string): boolean {
   });
 }
 
-function isBlockedV6(address: string): boolean {
+/**
+ * Expand an IPv6 address into its eight 16-bit groups.
+ *
+ * Ranges have to be matched on the expanded form, not on the text: the same
+ * address has many spellings, and `URL` picks its own. `[::ffff:169.254.169.254]`
+ * comes back out of the parser as `[::ffff:a9fe:a9fe]`, so a check that only
+ * recognises the dotted spelling misses the address it was written to catch.
+ */
+function expandV6(address: string): number[] | undefined {
   const value = address.toLowerCase().split('%')[0]!;
-  // An IPv4 address wearing an IPv6 coat reaches the same host.
-  const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isBlockedV4(mapped[1]!);
-  if (value === '::1' || value === '::') return true;
-  const head = value.split(':')[0] ?? '';
-  const leading = parseInt(head.padEnd(4, '0'), 16);
-  if (Number.isNaN(leading)) return true;
-  if ((leading & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
-  if ((leading & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  const [head, tail, ...rest] = value.split('::');
+  if (rest.length > 0) return undefined;
+
+  const parse = (part: string): (number[] | undefined)[] => {
+    if (part === '') return [[]];
+    return part.split(':').map((group) => {
+      // A trailing dotted quad ("::ffff:1.2.3.4") stands for two groups.
+      if (group.includes('.')) {
+        const quad = ipv4ToInt(group);
+        return quad === undefined ? undefined : [quad >>> 16, quad & 0xffff];
+      }
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return undefined;
+      return [parseInt(group, 16)];
+    });
+  };
+
+  const groups: number[] = [];
+  for (const chunk of parse(head!)) {
+    if (chunk === undefined) return undefined;
+    groups.push(...chunk);
+  }
+  if (tail === undefined) return groups.length === 8 ? groups : undefined;
+
+  const tailGroups: number[] = [];
+  for (const chunk of parse(tail)) {
+    if (chunk === undefined) return undefined;
+    tailGroups.push(...chunk);
+  }
+  const gap = 8 - groups.length - tailGroups.length;
+  if (gap < 1) return undefined;
+  return [...groups, ...new Array<number>(gap).fill(0), ...tailGroups];
+}
+
+function embeddedV4(groups: number[]): string {
+  const high = groups[6]!;
+  const low = groups[7]!;
+  return [high >>> 8, high & 0xff, low >>> 8, low & 0xff].join('.');
+}
+
+function isBlockedV6(address: string): boolean {
+  const groups = expandV6(address);
+  if (groups === undefined) return true;
+
+  const [a, b, c, d, e, f] = groups as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const topSixZero = a === 0 && b === 0 && c === 0 && d === 0 && e === 0;
+
+  // An IPv4 address wearing an IPv6 coat reaches the same host, whichever
+  // prefix carries it: ::ffff:0:0/96 mapped, ::/96 the deprecated compatible
+  // form (which also covers ::1 and ::), 64:ff9b::/96 NAT64.
+  if (topSixZero && (f === 0xffff || f === 0))
+    return isBlockedV4(embeddedV4(groups));
+  if (
+    a === 0x0064 &&
+    b === 0xff9b &&
+    c === 0 &&
+    d === 0 &&
+    e === 0 &&
+    f === 0
+  ) {
+    return isBlockedV4(embeddedV4(groups));
+  }
+  // 2002::/16 6to4 carries its gateway's IPv4 address in the next two groups.
+  if (a === 0x2002) {
+    return isBlockedV4([b >>> 8, b & 0xff, c >>> 8, c & 0xff].join('.'));
+  }
+
+  if ((a & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((a & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((a & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   return false;
 }
 
