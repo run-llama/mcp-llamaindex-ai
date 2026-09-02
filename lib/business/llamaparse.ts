@@ -309,7 +309,7 @@ export async function createExtractConfigFromSchema({
   projectId?: string | undefined;
   name: string;
   dataSchema: Record<string, unknown>;
-  tier?: undefined | 'cost_effective' | 'agentic';
+  tier?: ExtractV2Parameters['tier'];
   extractionTarget?: undefined | 'per_doc' | 'per_page' | 'per_table_row';
 }): Promise<string> {
   const client = llamaCloudClient(token);
