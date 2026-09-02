@@ -1103,16 +1103,16 @@ export function registerCreateExtractionConfigFromSchemaTool(
           'Project ID that the tool should use. Uses the default project if not provided.'
         ),
       tier: z
-        .enum(['cost_effective', 'agentic'])
+        .enum(['cost_effective', 'agentic', 'agentic_plus', 'turbo'])
         .optional()
         .describe(
-          'Extraction quality tier. Defaults to cost_effective; use agentic for complex or ambiguous documents.'
+          'Extraction quality tier. Defaults to cost_effective (5 credits/page); agentic (15) handles complex or ambiguous documents and agentic_plus (50) is the most capable. turbo (35) is the speed tier: it returns in seconds on short documents, but it produces no parse output, accepts only PDF, JPG and PNG, and supports extractionTarget per_doc only. Turbo bills more per page than agentic — it pays for latency, not for savings, so pick it only when response time is user-facing.'
         ),
       extractionTarget: z
         .enum(['per_doc', 'per_page', 'per_table_row'])
         .optional()
         .describe(
-          'Whether to produce one object per document (default), per page, or per table row.'
+          'Whether to produce one object per document (default), per page, or per table row. Turbo supports per_doc only.'
         ),
     },
     {
@@ -1151,6 +1151,18 @@ export function registerCreateExtractionConfigFromSchemaTool(
             );
           }
 
+          if (
+            args.tier === 'turbo' &&
+            args.extractionTarget &&
+            args.extractionTarget !== 'per_doc'
+          ) {
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw new Error(
+              `Turbo runs per document: extractionTarget '${args.extractionTarget}' is rejected. Use per_doc, or choose another tier.`
+            );
+          }
+
           let dataSchema: Record<string, unknown>;
           let defaultName: string;
           if (templateId) {
@@ -1176,7 +1188,12 @@ export function registerCreateExtractionConfigFromSchemaTool(
               projectId: args.projectId as string | undefined,
               name: (args.name as string | undefined) ?? defaultName,
               dataSchema,
-              tier: args.tier as undefined | 'cost_effective' | 'agentic',
+              tier: args.tier as
+                | undefined
+                | 'cost_effective'
+                | 'agentic'
+                | 'agentic_plus'
+                | 'turbo',
               extractionTarget: args.extractionTarget as
                 | undefined
                 | 'per_doc'

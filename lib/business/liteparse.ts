@@ -219,7 +219,7 @@ export async function getFile(
   client: LlamaCloud,
   fileId: string
 ): Promise<Buffer> {
-  const presigned_url = await client.files.get(fileId);
+  const presigned_url = await client.files.content(fileId);
   const response = await fetch(presigned_url.url);
   if (!response.ok) {
     const text = await response.text();

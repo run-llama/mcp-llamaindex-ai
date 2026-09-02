@@ -12,8 +12,8 @@ importers:
         specifier: ^2.10.0
         version: 2.10.0
       '@llamaindex/llama-cloud':
-        specifier: 2.8.0
-        version: 2.8.0
+        specifier: 2.15.0
+        version: 2.15.0
       '@modelcontextprotocol/sdk':
         specifier: 1.15.0
         version: 1.15.0
@@ -608,8 +608,8 @@ packages:
     resolution: {integrity: sha512-0/gj65OrwuBb2c4CuFFdT9Xg1b4zzjcEn2i/l/O1BobXf8Oeo+eWetMe1G44aYmLDMjihBBlXy0vbSXTYJ+efw==}
     engines: {node: '>=18.0.0'}
 
-  '@llamaindex/llama-cloud@2.8.0':
-    resolution: {integrity: sha512-L/Bao8ebVZpVwkpig54IlKEaFXYn4YoKhIWXtDqwul4Vxa8y+o9qvJL9qdWhpajrxPsHigTSPHn9C8OR80W+HA==}
+  '@llamaindex/llama-cloud@2.15.0':
+    resolution: {integrity: sha512-cC4p3evDD3mrOjakshCqF/hq5LWcBfEyG5Lmq898PRTrJ/bL0duzZCJfmUkqVWSR5APvnuo2W5reAvyDHKUnzg==}
 
   '@modelcontextprotocol/sdk@1.15.0':
     resolution: {integrity: sha512-67hnl/ROKdb03Vuu0YOr+baKTvf1/5YBHBm9KnZdjdAh8hjt4FRCPD5ucwxGB237sBpzlqQsLy1PFu7z/ekZ9Q==}
@@ -4059,7 +4059,7 @@ snapshots:
 
   '@llamaindex/liteparse-wasm@2.10.0': {}
 
-  '@llamaindex/llama-cloud@2.8.0': {}
+  '@llamaindex/llama-cloud@2.15.0': {}
 
   '@modelcontextprotocol/sdk@1.15.0':
     dependencies:
