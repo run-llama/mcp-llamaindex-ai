@@ -95,6 +95,67 @@ describe('formatRetrievalResults', () => {
     );
   });
 
+  it('surfaces attachment refs so page screenshots are discoverable', () => {
+    const out = formatRetrievalResults([
+      result({
+        static_fields: {
+          parsed_directory_file_id: 'dfl-9c1',
+          page_range_start: 8,
+          page_range_end: 8,
+          attachments: [
+            {
+              type: 'screenshot',
+              attachment_name: 'screenshots/page_8.jpg',
+              source_id: 'dfl-9c1',
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(out).toContain(
+      '<attachment type="screenshot" name="screenshots/page_8.jpg" source_id="dfl-9c1" />'
+    );
+  });
+
+  // A chunk spanning pages carries one ref per page per kind; collapsing them
+  // would hide every page but the first.
+  it('renders every attachment a chunk carries', () => {
+    const out = formatRetrievalResults([
+      result({
+        static_fields: {
+          attachments: [
+            {
+              type: 'screenshot',
+              attachment_name: 'screenshots/page_8.jpg',
+              source_id: 'dfl-9c1',
+            },
+            {
+              type: 'screenshot',
+              attachment_name: 'screenshots/page_9.jpg',
+              source_id: 'dfl-9c1',
+            },
+            {
+              type: 'items',
+              attachment_name: 'items/page_8.json',
+              source_id: 'dfl-9c1',
+            },
+          ],
+        },
+      }),
+    ]);
+    expect((out.match(/<attachment /g) ?? []).length).toBe(3);
+    expect(out).toContain('type="items"');
+  });
+
+  // Indexes built without storeAttachments return an empty list; an empty block
+  // would be noise in every result.
+  it('omits the attachments block when there are none', () => {
+    expect(
+      formatRetrievalResults([result({ static_fields: { attachments: [] } })])
+    ).not.toContain('<attachments>');
+    expect(formatRetrievalResults([result()])).not.toContain('<attachments>');
+  });
+
   // Hybrid-fusion scores are not interpretable standalone and were read as
   // "bad match" when small, so they are intentionally not rendered.
   it('never renders relevance scores', () => {
