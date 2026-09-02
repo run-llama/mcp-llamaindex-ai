@@ -675,6 +675,9 @@ function attr(name: string, value: string | number | null | undefined): string {
  * which silently discarded the tail of every long chunk — the caller asked for
  * these passages, and deciding how much of a response to keep belongs to the
  * agent harness, not here. Callers wanting less should lower `top_k`.
+ *
+ * Attachment refs are surfaced for the same reason as provenance: a chunk that
+ * describes a chart says nothing about the page image stored beside it.
  */
 export function formatRetrievalResults(results: RetrievalResults): string {
   if (results.length === 0) {
@@ -704,7 +707,26 @@ export function formatRetrievalResults(results: RetrievalResults): string {
         ? `\n  <metadata>${escapeXml(JSON.stringify(r.metadata))}</metadata>`
         : '';
 
-    return `${open}\n  <content>${escapeXml(r.content)}</content>${metadata}\n</result>`;
+    // Nothing in the chunk text mentions the page image stored beside it, so an
+    // agent that is never shown the ref cannot know a screenshot exists.
+    const refs = s.attachments ?? [];
+    const attachments =
+      refs.length > 0
+        ? '\n  <attachments>' +
+          refs
+            .map(
+              (a) =>
+                '\n    <attachment' +
+                attr('type', a.type) +
+                attr('name', a.attachment_name) +
+                attr('source_id', a.source_id) +
+                ' />'
+            )
+            .join('') +
+          '\n  </attachments>'
+        : '';
+
+    return `${open}\n  <content>${escapeXml(r.content)}</content>${metadata}${attachments}\n</result>`;
   });
 
   return `<results count="${results.length}">\n${rendered.join('\n')}\n</results>`;

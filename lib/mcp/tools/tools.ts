@@ -1530,7 +1530,7 @@ export function registerRetrieveFromIndexTool(server: McpServer) {
     );
   server.tool(
     'retrieveFromIndex',
-    'Perform hybrid search on the index, providing a query and, optionally, the top K documents to retrieve and the top N documents to rerank',
+    'Perform hybrid search on the index, providing a query and, optionally, the top K documents to retrieve and the top N documents to rerank. Results carry provenance (file ID, page range) and, when the index stores them, references to per-page screenshots.',
     schema,
     {
       title: 'Search Index',
