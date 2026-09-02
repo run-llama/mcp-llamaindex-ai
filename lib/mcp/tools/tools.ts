@@ -1188,12 +1188,7 @@ export function registerCreateExtractionConfigFromSchemaTool(
               projectId: args.projectId as string | undefined,
               name: (args.name as string | undefined) ?? defaultName,
               dataSchema,
-              tier: args.tier as
-                | undefined
-                | 'cost_effective'
-                | 'agentic'
-                | 'agentic_plus'
-                | 'turbo',
+              tier: args.tier,
               extractionTarget: args.extractionTarget as
                 | undefined
                 | 'per_doc'
