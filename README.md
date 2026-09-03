@@ -243,6 +243,19 @@ LLAMA_CLOUD_BASE_URL=https://llamacloud.internal.example.com
 REDIS_URI=redis://...
 ```
 
+A Helm or Kubernetes deployment can supply the connection as separate values
+instead, which is what the LlamaCloud chart emits. `REDIS_URI` wins when both
+are set:
+
+```bash
+REDIS_HOST=llamacloud-redis
+REDIS_PORT=6379
+REDIS_SCHEME=redis        # rediss for TLS
+REDIS_DB=0                # optional
+REDIS_USERNAME=default    # optional
+REDIS_PASSWORD=...        # optional
+```
+
 No `WORKOS_*` variable is required. (The AuthKit package is still imported and
 reads a few at load, defaulting to empty; nothing in this mode depends on
 them.) Callers authenticate by sending a LlamaCloud API key as the bearer
