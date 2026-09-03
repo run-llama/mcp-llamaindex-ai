@@ -482,6 +482,10 @@ describe('a self-hosted LlamaCloud host', () => {
   it.each([
     ['a public FQDN', 'http://llamacloud.example.com'],
     ['a public IP literal', 'http://203.0.113.10:8000'],
+    // Legal, publicly resolvable names that a prefix test alone reads as
+    // private-range literals.
+    ['a public FQDN under a 10. label', 'http://10.example.com'],
+    ['a public FQDN under a 192.168. label', 'http://192.168.evil.net'],
   ])('still refuses cleartext to %s', (_label, url) => {
     process.env.MCP_AUTH_MODE = 'api_key';
     process.env.LLAMA_CLOUD_REGION = 'na';

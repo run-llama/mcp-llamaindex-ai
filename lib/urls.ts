@@ -43,6 +43,13 @@ export function isClusterInternalHostname(hostname: string): boolean {
 
   if (h.endsWith('.svc') || h.endsWith('.svc.cluster.local')) return true;
 
+  // Range-matched only against a dotted quad. `10.example.com` and
+  // `192.168.evil.net` are legal, publicly resolvable names, and a prefix test
+  // on its own would read them as private and send the API key there in
+  // cleartext. A literal reaches here already canonicalised by the URL parser,
+  // so the octal and integer spellings of an address cannot dodge this.
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return false;
+
   // RFC1918 and link-local literals.
   return (
     /^10\./.test(h) ||
