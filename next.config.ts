@@ -14,6 +14,10 @@ const LITEPARSE_TRACE_INCLUDES = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Emits a self-contained server plus only the traced node_modules, which is
+  // what the container runs. Vercel does not need it; a Helm-deployed BYOC
+  // install has no build step of its own.
+  output: 'standalone',
   transpilePackages: ['@workos-inc/authkit-nextjs'],
   serverExternalPackages: ['@llamaindex/liteparse-wasm'],
   outputFileTracingRoot: __dirname,
