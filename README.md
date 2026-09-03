@@ -276,7 +276,13 @@ What changes in this mode:
   stores the caller's credential so the upload route can spend it, which is
   bounded for an expiring token and not for a key. Use `uploadFileByUrl`.
 - `LLAMA_CLOUD_BASE_URL` may name your own host. It must be `https`, since it
-  carries the API key and the document contents. `LLAMA_CLOUD_REGION` is still
+  carries the API key and the document contents — except for a host that cannot
+  be reached from outside the cluster (an unqualified Service name such as
+  `llamacloud`, a `.svc` address, or a private-range literal), where cleartext
+  is accepted so the standard `http://<service>:80` wiring works. Those hosts
+  must state the scheme explicitly: a bare `llamacloud:80` would be read as
+  `https` and then fail every request on a handshake error, having booted green.
+  `LLAMA_CLOUD_REGION` is still
   required so the deployment states what it serves rather than inheriting `na`
   by default; it does not affect routing, because the base URL is explicit.
 - The EU compute pin is not applied. It exists to hold our own residency
