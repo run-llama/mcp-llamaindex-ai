@@ -57,6 +57,18 @@ describe('redisUriFromParts', () => {
     expect(new URL(uri).hostname).toBe('[::1]');
   });
 
+  it('leaves an already-bracketed IPv6 host alone', () => {
+    setRedisEnv({ REDIS_HOST: '[::1]' });
+    const uri = redisUriFromParts()!;
+    expect(uri).toBe('redis://[::1]:6379');
+    expect(new URL(uri).hostname).toBe('[::1]');
+  });
+
+  it('trims values rendered with a trailing newline', () => {
+    setRedisEnv({ REDIS_HOST: 'r.internal\n', REDIS_PORT: ' 6380 ' });
+    expect(redisUriFromParts()).toBe('redis://r.internal:6380');
+  });
+
   // `user:@` makes node-redis send AUTH with an empty password, which is
   // rejected — different from connecting as that user with no password.
   it('omits the password segment when only a username is set', () => {

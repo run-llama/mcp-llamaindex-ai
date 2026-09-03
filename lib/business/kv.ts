@@ -11,11 +11,13 @@ import { Mutex } from 'async-mutex';
  * change which host the URI points at.
  */
 export function redisUriFromParts(): string | undefined {
-  const host = process.env.REDIS_HOST;
+  // Trimmed because a value rendered from a Secret or a here-doc often carries
+  // a trailing newline, which would make the URI unparseable.
+  const host = process.env.REDIS_HOST?.trim();
   if (!host) return undefined;
 
-  const scheme = process.env.REDIS_SCHEME || 'redis';
-  const port = process.env.REDIS_PORT || '6379';
+  const scheme = process.env.REDIS_SCHEME?.trim() || 'redis';
+  const port = process.env.REDIS_PORT?.trim() || '6379';
   const db = process.env.REDIS_DB;
   const user = process.env.REDIS_USERNAME;
   const password = process.env.REDIS_PASSWORD;
@@ -31,8 +33,10 @@ export function redisUriFromParts(): string | undefined {
   }
 
   // A bare IPv6 address makes the port delimiter ambiguous: redis://::1:6379
-  // does not parse.
-  const authority = host.includes(':') ? `[${host}]` : host;
+  // does not parse. An already-bracketed value is left alone — bracketing it
+  // again produces `[[::1]]`, which does not parse either.
+  const bracketed = host.startsWith('[') && host.endsWith(']');
+  const authority = !bracketed && host.includes(':') ? `[${host}]` : host;
 
   return `${scheme}://${credentials}${authority}:${port}${db ? `/${db}` : ''}`;
 }
