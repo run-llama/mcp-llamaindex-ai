@@ -448,6 +448,79 @@ describe('a self-hosted LlamaCloud host', () => {
     expect(() => resolve().llamaCloudBaseUrl()).toThrow(/must use https/);
   });
 
+  // The chart wires every component to its siblings over http://<service>:80,
+  // so refusing cleartext to those hosts would block the standard wiring.
+  // The normalised form is asserted rather than the input: :80 is http's default
+  // port and is dropped, which is what the SDK then concatenates onto.
+  it.each([
+    [
+      'an unqualified Service name',
+      'http://llamacloud:80',
+      'http://llamacloud',
+    ],
+    [
+      'a .svc address',
+      'http://llamacloud.default.svc:80',
+      'http://llamacloud.default.svc',
+    ],
+    [
+      'a cluster-local FQDN',
+      'http://llamacloud.default.svc.cluster.local',
+      'http://llamacloud.default.svc.cluster.local',
+    ],
+    ['an RFC1918 literal', 'http://10.4.1.9:8000', 'http://10.4.1.9:8000'],
+  ])('accepts cleartext to %s', (_label, url, expected) => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL = url;
+
+    expect(resolve().llamaCloudBaseUrl()).toBe(expected);
+  });
+
+  // The case the https rule exists for: a public host would put the API key and
+  // document contents on the open internet.
+  it.each([
+    ['a public FQDN', 'http://llamacloud.example.com'],
+    ['a public IP literal', 'http://203.0.113.10:8000'],
+  ])('still refuses cleartext to %s', (_label, url) => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL = url;
+
+    expect(() => resolve().llamaCloudBaseUrl()).toThrow(/must use https/);
+  });
+
+  // `llamacloud:80` normalises to https and would then fail every request on a
+  // handshake error, having booted green.
+  it('requires an explicit scheme for a cluster-internal host', () => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL = 'llamacloud:80';
+
+    expect(() => resolve().llamaCloudBaseUrl()).toThrow(/explicit http:/);
+  });
+
+  it('still allows https to a cluster-internal host', () => {
+    process.env.MCP_AUTH_MODE = 'api_key';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL = 'https://llamacloud.default.svc';
+
+    expect(resolve().llamaCloudBaseUrl()).toBe(
+      'https://llamacloud.default.svc'
+    );
+  });
+
+  // oauth mode never reaches the self-hosted branch at all.
+  it('does not accept a cluster-internal host in oauth mode', () => {
+    process.env.MCP_AUTH_MODE = 'oauth';
+    process.env.LLAMA_CLOUD_REGION = 'na';
+    process.env.LLAMA_CLOUD_BASE_URL = 'http://llamacloud:80';
+
+    expect(() => resolve().llamaCloudBaseUrl()).toThrow(
+      /not a recognised LlamaCloud API/
+    );
+  });
+
   it('still requires the region to be stated', () => {
     process.env.MCP_AUTH_MODE = 'api_key';
     delete process.env.LLAMA_CLOUD_REGION;

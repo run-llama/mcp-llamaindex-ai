@@ -1,5 +1,9 @@
 import 'server-only';
-import { isLoopbackHostname, normalizeBaseUrl } from './urls';
+import {
+  isClusterInternalHostname,
+  isLoopbackHostname,
+  normalizeBaseUrl,
+} from './urls';
 import { authMode } from './auth/mode';
 
 export type Region = 'na' | 'eu';
@@ -188,11 +192,23 @@ function resolveRegionConfig(): { region: Region; baseUrl: string } {
         `LLAMA_CLOUD_BASE_URL points at "${hostname}", which is not a known region API, so LLAMA_CLOUD_REGION must state the region this deployment serves.`
       );
     }
-    // Unchanged from the region hosts above, and it matters more here, not
-    // less: this URL carries the API key and the document contents.
-    if (url.protocol !== 'https:') {
+    // Still required against a public host — that is the case that would put
+    // the API key and document contents on the open internet. A cluster-internal
+    // host is exempt: the chart wires every component to its siblings over
+    // http://<service>:80 and already proxies authenticated traffic that way, so
+    // demanding TLS only here would block the standard wiring without keeping
+    // anything off a network the operator does not already control.
+    const internal = isClusterInternalHostname(hostname);
+    if (url.protocol !== 'https:' && !internal) {
       throw new RegionConfigError(
-        `LLAMA_CLOUD_BASE_URL must use https for "${hostname}" — "${url.protocol}" would send the API key and document contents in cleartext.`
+        `LLAMA_CLOUD_BASE_URL must use https for "${hostname}" — "${url.protocol}" would send the API key and document contents in cleartext. Cleartext is accepted only for a cluster-internal host (an unqualified Service name, a .svc address, or a private-range literal).`
+      );
+    }
+    // Same trap as loopback: a bare `llamacloud:80` normalises to https and then
+    // fails every request on a handshake error, having booted green.
+    if (internal && !/^https?:\/\//i.test(rawOverride)) {
+      throw new RegionConfigError(
+        `LLAMA_CLOUD_BASE_URL must include an explicit http:// or https:// scheme for the cluster-internal host "${hostname}".`
       );
     }
     return { region: declared, baseUrl };

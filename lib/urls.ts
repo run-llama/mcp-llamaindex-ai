@@ -15,6 +15,44 @@ export function isLoopbackHostname(hostname: string): boolean {
 }
 
 /**
+ * Hosts reachable only from inside the cluster this server runs in. Cleartext
+ * is acceptable to these for the same reason it is to loopback: the traffic
+ * never crosses a network the operator does not control.
+ *
+ * This exists because every other component in the LlamaCloud chart already
+ * talks to its siblings over `http://<service>:80` — the frontend proxies
+ * authenticated API traffic that way today. Refusing it here would make the MCP
+ * server the only workload that cannot be wired the standard way, without
+ * protecting anything its neighbours are not already sending.
+ *
+ * Decided from the name alone, so the check stays synchronous: resolving DNS
+ * during config validation would make startup depend on the resolver, and a
+ * resolver answer can change after the check anyway.
+ */
+export function isClusterInternalHostname(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+
+  // Bracketed IPv6. Unique-local (fc00::/7) and link-local (fe80::/10) only.
+  if (h.startsWith('[')) {
+    return /^\[(f[cd]|fe[89ab])/.test(h);
+  }
+
+  // A single-label name has no meaning in public DNS: `llamacloud` can only be
+  // a Service in the same namespace, or a hosts-file entry.
+  if (!h.includes('.')) return true;
+
+  if (h.endsWith('.svc') || h.endsWith('.svc.cluster.local')) return true;
+
+  // RFC1918 and link-local literals.
+  return (
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    /^169\.254\./.test(h)
+  );
+}
+
+/**
  * Constraints a caller places on a configured URL. The consumers of this helper
  * do not all want the same thing, and the differences are load-bearing: an
  * OAuth issuer must be an https origin with no path, while a base URL that
