@@ -241,6 +241,19 @@ MCP_AUTH_MODE=api_key
 LLAMA_CLOUD_REGION=na                                  # or eu
 LLAMA_CLOUD_BASE_URL=https://llamacloud.internal.example.com
 REDIS_URI=redis://...
+
+A Helm or Kubernetes deployment can supply the connection as separate values
+instead, which is what the LlamaCloud chart emits. `REDIS_URI` wins when both
+are set:
+
+```
+REDIS_HOST=llamacloud-redis
+REDIS_PORT=6379
+REDIS_SCHEME=redis        # rediss for TLS
+REDIS_DB=0                # optional
+REDIS_USERNAME=default    # optional
+REDIS_PASSWORD=...        # optional
+```
 ```
 
 No `WORKOS_*` variable is required. (The AuthKit package is still imported and

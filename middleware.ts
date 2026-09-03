@@ -20,6 +20,9 @@ export default apiKeyOnly ? () => NextResponse.next() : authkitMiddleware();
 export const config = {
   matcher: [
     '/',
-    '/((?!_next/static|_next/image|favicon.ico).*)', // all app routes
+    // /api/healthz is excluded so the probe reports on the server rather than
+    // on WorkOS configuration: in oauth mode with WorkOS unset, AuthKit throws
+    // per request, which would fail the probe and crash-loop the pod.
+    '/((?!_next/static|_next/image|favicon.ico|api/healthz).*)', // all app routes
   ],
 };

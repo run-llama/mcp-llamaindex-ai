@@ -20,12 +20,21 @@ export function redisUriFromParts(): string | undefined {
   const user = process.env.REDIS_USERNAME;
   const password = process.env.REDIS_PASSWORD;
 
-  const credentials =
-    user || password
-      ? `${encodeURIComponent(user ?? '')}:${encodeURIComponent(password ?? '')}@`
-      : '';
+  let credentials = '';
+  if (user || password) {
+    const encodedUser = encodeURIComponent(user ?? '');
+    // `user:@` is not "no password" — node-redis sends AUTH with an empty
+    // string and the server rejects it.
+    credentials = password
+      ? `${encodedUser}:${encodeURIComponent(password)}@`
+      : `${encodedUser}@`;
+  }
 
-  return `${scheme}://${credentials}${host}:${port}${db ? `/${db}` : ''}`;
+  // A bare IPv6 address makes the port delimiter ambiguous: redis://::1:6379
+  // does not parse.
+  const authority = host.includes(':') ? `[${host}]` : host;
+
+  return `${scheme}://${credentials}${authority}:${port}${db ? `/${db}` : ''}`;
 }
 
 class KVStore {
@@ -34,7 +43,7 @@ class KVStore {
   private mu: Mutex;
 
   constructor() {
-    const uri = process.env.REDIS_URI ?? redisUriFromParts();
+    const uri = process.env.REDIS_URI?.trim() || redisUriFromParts();
     if (uri) {
       this.uri = uri;
       this.mu = new Mutex();

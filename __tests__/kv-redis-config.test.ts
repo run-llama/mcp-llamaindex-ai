@@ -49,8 +49,48 @@ describe('redisUriFromParts', () => {
     expect(new URL(uri).hostname).toBe('r.internal');
   });
 
+  // redis://::1:6379 does not parse — the port delimiter is ambiguous.
+  it('brackets an IPv6 host', () => {
+    setRedisEnv({ REDIS_HOST: '::1' });
+    const uri = redisUriFromParts()!;
+    expect(uri).toBe('redis://[::1]:6379');
+    expect(new URL(uri).hostname).toBe('[::1]');
+  });
+
+  // `user:@` makes node-redis send AUTH with an empty password, which is
+  // rejected — different from connecting as that user with no password.
+  it('omits the password segment when only a username is set', () => {
+    setRedisEnv({ REDIS_HOST: 'r.internal', REDIS_USERNAME: 'default' });
+    expect(redisUriFromParts()).toBe('redis://default@r.internal:6379');
+  });
+
   it('supports a password with no username', () => {
     setRedisEnv({ REDIS_HOST: 'r.internal', REDIS_PASSWORD: 'secret' });
     expect(redisUriFromParts()).toBe('redis://:secret@r.internal:6379');
+  });
+});
+
+// The fall-through lives in the KVStore constructor, not in the helper, so it
+// has to be exercised through getKVStore.
+describe('KVStore construction', () => {
+  afterAll(() => {
+    process.env = { ...ORIGINAL };
+  });
+
+  function freshGetKVStore() {
+    jest.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('../lib/business/kv').getKVStore as () => unknown;
+  }
+
+  // A chart or .env that renders REDIS_URI= must not shadow the discrete vars.
+  it('falls through to the discrete vars when REDIS_URI is empty', () => {
+    setRedisEnv({ REDIS_URI: '', REDIS_HOST: 'r.internal' });
+    expect(() => freshGetKVStore()()).not.toThrow();
+  });
+
+  it('still refuses when neither form is configured', () => {
+    setRedisEnv({});
+    expect(() => freshGetKVStore()()).toThrow(/REDIS_URI/);
   });
 });
