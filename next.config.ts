@@ -27,6 +27,13 @@ const nextConfig = {
     '/split/mcp': LITEPARSE_TRACE_INCLUDES,
     '/split/[configId]/mcp': LITEPARSE_TRACE_INCLUDES,
   },
+  async rewrites() {
+    return [
+      // Keeps the published /index/mcp URL while the files live outside a
+      // directory called `index` — see app/indexes/mcp/route.ts.
+      { source: '/index/mcp', destination: '/indexes/mcp' },
+    ];
+  },
   async redirects() {
     return [
       {

@@ -1,7 +1,12 @@
 import { buildMcpRouteHandler } from '@/lib/mcp/handler';
 import { registerIndexTools } from '@/lib/mcp/tools/tools';
 
-// Index-only MCP server. Endpoint: /index/mcp
+// Index-only MCP server. Endpoint: /index/mcp, rewritten here in next.config.
+//
+// The directory cannot be named `index`: Next writes a route segment with that
+// name to .next/server/app/index/index/mcp, and Vercel packages functions by
+// that path, so nothing serves /index/mcp and every request 404s. `next start`
+// resolves it from the manifest and hides the problem locally.
 // Covers both halves of Index: querying an existing index, and building one.
 const authHandler = buildMcpRouteHandler(registerIndexTools, '/index', {
   serverInfo: {
