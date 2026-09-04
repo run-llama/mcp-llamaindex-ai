@@ -1,4 +1,8 @@
-# syntax=docker/dockerfile:1
+# No `# syntax=` pin. That directive makes BuildKit pull the frontend image from
+# Docker Hub, and the publish workflow logs in first with a token scoped to push
+# `llamaindex/` — which cannot pull `docker/dockerfile`, so an authenticated
+# build fails where an anonymous one would have worked. buildx's built-in
+# frontend already supports the cache mounts below.
 
 # Build stage: needs the full dependency tree; the runtime stage does not.
 FROM node:22-alpine AS builder
