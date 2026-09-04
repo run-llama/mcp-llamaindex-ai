@@ -106,12 +106,6 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       # arm64 as well as amd64: a BYOC cluster on Graviton is ordinary, and a
       # single-arch image fails to schedule there with a manifest error that
       # reads like a missing tag.
@@ -127,6 +121,13 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
           outputs: type=oci,dest=/tmp/image.tar
+          labels: |
+            org.opencontainers.image.title=llamacloud-mcp
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Off because it adds `unknown/unknown` entries to the manifest list,
+          # which read as a broken platform to some scanners and to the check below.
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -158,21 +159,41 @@ jobs:
           print(f"Verified {sorted(published)}; publishing.")
           EOF
 
-      # Cache-only: every layer was produced by the build above, so this pushes
-      # rather than rebuilds.
+      # Pushes the archive that was just verified, rather than rebuilding. The
+      # credential is a push-only token scoped to this one repository, so it
+      # cannot pull `library/node` — presenting it during a build makes every
+      # base-image pull 401 where an anonymous pull succeeds. Authenticating
+      # only here keeps the build anonymous and the token out of it entirely.
+      - name: Install skopeo
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+
       - name: Publish
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: llamaindex/llamacloud-mcp:${{ steps.version.outputs.version }}
-          labels: |
-            org.opencontainers.image.title=llamacloud-mcp
-            org.opencontainers.image.version=${{ steps.version.outputs.version }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          # Off because it adds `unknown/unknown` entries to the manifest list,
-          # which read as a broken platform to some scanners.
-          provenance: false
-          cache-from: type=gha
+        env:
+          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          skopeo copy --all \
+            --dest-creds "${USERNAME}:${TOKEN}" \
+            oci-archive:/tmp/image.tar \
+            "docker://llamaindex/llamacloud-mcp:${VERSION}"
+
+      # Reads back from the registry rather than trusting the push: this is the
+      # only check that sees what a customer would actually pull.
+      - name: Confirm the published image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          skopeo inspect --raw "docker://llamaindex/llamacloud-mcp:${VERSION}" > published.json
+          python3 - <<'EOF'
+          import json, sys
+          d = json.load(open("published.json"))
+          got = sorted({f"{m['platform']['os']}/{m['platform']['architecture']}"
+                        for m in d.get("manifests", [])
+                        if m.get("platform", {}).get("architecture") not in (None, "unknown")})
+          missing = {"linux/amd64", "linux/arm64"} - set(got)
+          if missing:
+              print(f"::error::published image has {got}; missing {sorted(missing)}")
+              sys.exit(1)
+          print(f"Published and verified from the registry: {got}")
+          EOF
