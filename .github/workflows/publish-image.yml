@@ -92,11 +92,39 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: llamaindex/llamacloud-mcp:${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=llamacloud-mcp
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Off because it adds `unknown/unknown` entries to the manifest list,
+          # which read as a broken platform to some scanners and to the manifest
+          # assertion below. Revisit if we start consuming attestations.
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Confirm the published manifest
+      # Asserts the platforms rather than printing them: `imagetools inspect`
+      # succeeds on a single-arch image too, so on its own it would pass even if
+      # the arm64 leg were dropped — which is the failure this exists to catch.
+      - name: Confirm both platforms were published
+        env:
+          IMAGE: llamaindex/llamacloud-mcp:${{ steps.version.outputs.version }}
         run: |
-          docker buildx imagetools inspect \
-            "llamaindex/llamacloud-mcp:${{ steps.version.outputs.version }}"
+          docker buildx imagetools inspect "$IMAGE" --raw > manifest.json
+          python3 - "$IMAGE" <<'EOF'
+          import json, sys
+          image = sys.argv[1]
+          manifest = json.load(open("manifest.json"))
+          published = {
+              f"{m['platform']['os']}/{m['platform']['architecture']}"
+              for m in manifest.get("manifests", [])
+              if "platform" in m and m["platform"].get("architecture") != "unknown"
+          }
+          required = {"linux/amd64", "linux/arm64"}
+          missing = required - published
+          if missing:
+              print(f"::error::{image} published {sorted(published)}; missing {sorted(missing)}")
+              raise SystemExit(1)
+          print(f"{image} published for {sorted(published)}")
+          EOF
