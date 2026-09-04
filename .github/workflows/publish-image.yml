@@ -37,9 +37,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Fail here rather than at the push step, which would otherwise run the
-      # whole multi-arch build before discovering it cannot publish.
+      # Presence only. This does not prove the token can push to the llamaindex/
+      # namespace — a valid but unauthorised token still logs in and fails at the
+      # end. It catches the common case (secrets never granted) before the build.
       - name: Require registry credentials
         env:
           USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -70,6 +73,33 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Publishing llamaindex/llamacloud-mcp:${version}"
 
+      # A published tag is what a chart pins, so republishing it changes the code
+      # under installs that were told the tag is immutable. Docker Hub overwrites
+      # by default, so refuse it here.
+      - name: Refuse an already-published version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/repositories/llamaindex/llamacloud-mcp/tags/${VERSION}/")
+          if [[ "$code" == "200" ]]; then
+            echo "::error::llamaindex/llamacloud-mcp:${VERSION} is already published." \
+              "Publish a new version rather than moving a tag customers may have pinned."
+            exit 1
+          fi
+          echo "Tag ${VERSION} is unused (HTTP ${code})."
+
+      # CI runs on main and on pull requests, not on tags, so tagging an
+      # unmerged commit would publish code that never ran the suite.
+      - name: Require the commit to be on main
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::${GITHUB_SHA} is not an ancestor of origin/main." \
+              "Only tag commits that have merged and been tested."
+            exit 1
+          fi
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -85,7 +115,52 @@ jobs:
       # arm64 as well as amd64: a BYOC cluster on Graviton is ordinary, and a
       # single-arch image fails to schedule there with a manifest error that
       # reads like a missing tag.
-      - name: Build and push
+      #
+      # Built to a local OCI layout first. Verifying after a push cannot prevent
+      # the harm — the tag is already public and pullable as amd64-only, and the
+      # gate above then refuses to republish it. Nothing reaches the registry
+      # until both platforms are confirmed present.
+      - name: Build both platforms
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          outputs: type=oci,dest=/tmp/image.tar
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify both platforms before publishing
+        run: |
+          mkdir -p /tmp/oci && tar -xf /tmp/image.tar -C /tmp/oci
+          python3 - <<'EOF'
+          import json, pathlib, sys
+          root = pathlib.Path("/tmp/oci")
+          def blob(d):
+              algo, digest = d.split(":")
+              return json.loads((root / "blobs" / algo / digest).read_text())
+          index = json.loads((root / "index.json").read_text())
+          published = set()
+          for m in index["manifests"]:
+              entries = blob(m["digest"]).get("manifests", []) if m["mediaType"].endswith(
+                  ("index.v1+json", "list.v2+json")) else [m]
+              for e in entries:
+                  p = e.get("platform", {})
+                  # Provenance entries carry architecture "unknown" and must not
+                  # stand in for a real platform.
+                  if p.get("architecture") and p["architecture"] != "unknown":
+                      published.add(f"{p['os']}/{p['architecture']}")
+          missing = {"linux/amd64", "linux/arm64"} - published
+          if missing:
+              print(f"::error::built {sorted(published)}; missing {sorted(missing)} — not publishing")
+              sys.exit(1)
+          print(f"Verified {sorted(published)}; publishing.")
+          EOF
+
+      # Cache-only: every layer was produced by the build above, so this pushes
+      # rather than rebuilds.
+      - name: Publish
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -98,33 +173,6 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           # Off because it adds `unknown/unknown` entries to the manifest list,
-          # which read as a broken platform to some scanners and to the manifest
-          # assertion below. Revisit if we start consuming attestations.
+          # which read as a broken platform to some scanners.
           provenance: false
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Asserts the platforms rather than printing them: `imagetools inspect`
-      # succeeds on a single-arch image too, so on its own it would pass even if
-      # the arm64 leg were dropped — which is the failure this exists to catch.
-      - name: Confirm both platforms were published
-        env:
-          IMAGE: llamaindex/llamacloud-mcp:${{ steps.version.outputs.version }}
-        run: |
-          docker buildx imagetools inspect "$IMAGE" --raw > manifest.json
-          python3 - "$IMAGE" <<'EOF'
-          import json, sys
-          image = sys.argv[1]
-          manifest = json.load(open("manifest.json"))
-          published = {
-              f"{m['platform']['os']}/{m['platform']['architecture']}"
-              for m in manifest.get("manifests", [])
-              if "platform" in m and m["platform"].get("architecture") != "unknown"
-          }
-          required = {"linux/amd64", "linux/arm64"}
-          missing = required - published
-          if missing:
-              print(f"::error::{image} published {sorted(published)}; missing {sorted(missing)}")
-              raise SystemExit(1)
-          print(f"{image} published for {sorted(published)}")
-          EOF
