@@ -2,11 +2,18 @@
 
 # Build stage: needs the full dependency tree; the runtime stage does not.
 FROM node:22-alpine AS builder
+# Declared so the cache mount below can key on it; the stage still builds as the
+# target platform, because next build traces arch-specific SWC binaries into
+# node_modules and a cross-built bundle would ship the wrong ones.
+ARG TARGETPLATFORM
 WORKDIR /app
 
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+# The cache id carries the platform: a multi-arch build runs both legs
+# concurrently, and BuildKit cache mounts are shared by default, so one
+# store mounted twice produces intermittent pnpm store errors on release day.
+RUN --mount=type=cache,id=pnpm-$TARGETPLATFORM,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile
 
 COPY . .
