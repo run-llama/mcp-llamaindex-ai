@@ -244,6 +244,13 @@ jobs:
           GH_TOKEN: ${{ steps.platform-token.outputs.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          # This workflow publishes prereleases (0.3.0-rc1 and friends); the chart
+          # pin only ever advances to a full release, so nudging one would just log
+          # a failed run over there for a version it is right to refuse.
+          if [[ "${VERSION}" == *-* ]]; then
+            echo "prerelease ${VERSION}: not asking the chart to pin it"
+            exit 0
+          fi
           if gh workflow run bump-mcp-image.yml --repo run-llama/platform -f tag="${VERSION}"; then
             echo "asked run-llama/platform to pin ${VERSION}"
           else
