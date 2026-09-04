@@ -82,12 +82,27 @@ jobs:
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' \
             "https://hub.docker.com/v2/repositories/llamaindex/llamacloud-mcp/tags/${VERSION}/")
-          if [[ "$code" == "200" ]]; then
-            echo "::error::llamaindex/llamacloud-mcp:${VERSION} is already published." \
-              "Publish a new version rather than moving a tag customers may have pinned."
-            exit 1
-          fi
-          echo "Tag ${VERSION} is unused (HTTP ${code})."
+          # Only 404 proves the tag is free. Treating "anything but 200" as free
+          # made this fail open: a 429 or a Docker Hub 5xx -- or a curl that never
+          # connected, which reports 000 -- printed "unused" and published straight
+          # over a tag customers may already have pinned. An outage is a reason to
+          # retry the release, not to overwrite an image.
+          case "$code" in
+            200)
+              echo "::error::llamaindex/llamacloud-mcp:${VERSION} is already published." \
+                "Publish a new version rather than moving a tag customers may have pinned."
+              exit 1
+              ;;
+            404)
+              echo "Tag ${VERSION} is unused."
+              ;;
+            *)
+              echo "::error::cannot tell whether ${VERSION} is already published" \
+                "(HTTP ${code} from Docker Hub). Refusing to publish rather than risk" \
+                "overwriting a pinned tag -- re-run once Docker Hub is answering."
+              exit 1
+              ;;
+          esac
 
       # CI runs on main and on pull requests, not on tags, so tagging an
       # unmerged commit would publish code that never ran the suite.
@@ -197,3 +212,47 @@ jobs:
               sys.exit(1)
           print(f"Published and verified from the registry: {got}")
           EOF
+
+      # The image is published and verified by this point. What follows is a
+      # convenience: it asks the platform chart to pin the new version now,
+      # rather than waiting for that repo's scheduled reconcile to notice.
+      #
+      # A published image reaches no self-hosted deployment until that pin moves,
+      # so this is the step that turns a release into something customers can
+      # actually get.
+      #
+      # Deliberately non-fatal, both of them. This version can never be published
+      # again (the workflow refuses an already-published tag), so failing the run
+      # over a downstream nudge would strand a good image behind a red workflow
+      # and leave no way to retry it. The reconcile in run-llama/platform picks up
+      # anything this misses.
+      - name: Mint a token for the platform repo
+        id: platform-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CI_BOT_APP_ID }}
+          private-key: ${{ secrets.CI_BOT_PRIVATE_KEY }}
+          owner: run-llama
+          repositories: platform
+          permission-actions: write
+
+      - name: Ask the chart to pin this version
+        if: steps.platform-token.outputs.token != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.platform-token.outputs.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # This workflow publishes prereleases (0.3.0-rc1 and friends); the chart
+          # pin only ever advances to a full release, so nudging one would just log
+          # a failed run over there for a version it is right to refuse.
+          if [[ "${VERSION}" == *-* ]]; then
+            echo "prerelease ${VERSION}: not asking the chart to pin it"
+            exit 0
+          fi
+          if gh workflow run bump-mcp-image.yml --repo run-llama/platform -f tag="${VERSION}"; then
+            echo "asked run-llama/platform to pin ${VERSION}"
+          else
+            echo "::warning::could not trigger the chart pin bump for ${VERSION}; the scheduled reconcile in run-llama/platform will pick it up"
+          fi
