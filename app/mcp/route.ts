@@ -10,7 +10,8 @@ const authHandler = buildMcpRouteHandler(registerLlamaParseTools, '', {
   instructions:
     'LlamaParse Platform MCP server exposing the full set of Parse, Extract, Split, Classify and Index tools. ' +
     'Use the upload helpers (getUploadUrl, uploadFileByUrl) to push a local file to LlamaCloud, ' +
-    'then call parseFile, classifyFile, splitFile, or extractFile to process it. ' +
+    'then call parseFile, classifyFile, splitFile, or extractFile to process it — or ' +
+    'extractFileTurbo for real-time structured extraction with an inline schema and no saved config. ' +
     'Use getUserProjects to discover available projects, listIndexes to find indexes, and the ' +
     'index tools (findFilesInIndex, readFileFromIndex, grepFileFromIndex, retrieveFromIndex) to ' +
     'search and read documents in an existing index.',

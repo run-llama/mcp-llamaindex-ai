@@ -41,6 +41,7 @@ const WRITES = [
   'generateExtractionConfig',
   'createExtractionConfigFromSchema',
   'extractFile',
+  'extractFileTurbo',
   'createDirectory',
   'addFilesToDirectory',
   'createIndex',

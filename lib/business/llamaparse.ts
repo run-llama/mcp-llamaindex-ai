@@ -11,6 +11,7 @@ import {
 } from '@llamaindex/llama-cloud/resources/beta.js';
 import { APIError } from '@llamaindex/llama-cloud';
 import { ExtractV2Parameters } from '@llamaindex/llama-cloud/resources/configurations.js';
+import { ExtractConfiguration } from '@llamaindex/llama-cloud/resources/extract.js';
 import { llamaCloudClient } from './client';
 
 const MaximumWaitingTime: number = 1800 * 1000;
@@ -364,6 +365,59 @@ export async function extract({
   }
 
   return JSON.stringify(result, undefined, 2);
+}
+
+/**
+ * Run a Turbo extraction with the schema passed inline, polled to completion
+ * inside the call, so nothing is persisted and the result comes back in one
+ * round trip.
+ */
+export async function extractTurbo({
+  token,
+  fileId,
+  projectId = undefined,
+  dataSchema,
+  maxPages = undefined,
+}: {
+  token: string;
+  fileId: string;
+  projectId?: string | undefined;
+  dataSchema: Record<string, unknown>;
+  maxPages?: number | undefined;
+}): Promise<{
+  data: Record<string, unknown>;
+  jobId: string;
+  pagesBilled: number | null;
+}> {
+  const client = llamaCloudClient(token);
+  const job = await client.extract.run(
+    {
+      file_input: fileId,
+      project_id: projectId,
+      configuration: {
+        data_schema: dataSchema as ExtractConfiguration['data_schema'],
+        tier: 'turbo',
+        ...(maxPages !== undefined ? { max_pages: maxPages } : {}),
+      },
+    },
+    // Turbo answers in seconds, so poll tightly; the timeout only bounds a
+    // stuck job, not the normal path.
+    { pollingInterval: 1, maxInterval: 3, timeout: 300 }
+  );
+  if (!job.extract_result) {
+    throw new Error('No extract result produced');
+  }
+  // Turbo runs per_doc only, so an array result carries exactly one object.
+  const data = (
+    Array.isArray(job.extract_result)
+      ? job.extract_result[0]!
+      : job.extract_result
+  ) as Record<string, unknown>;
+  return {
+    data,
+    jobId: job.id,
+    pagesBilled: job.metadata?.usage?.num_pages_billed ?? null,
+  };
 }
 
 export async function listIndexes({
