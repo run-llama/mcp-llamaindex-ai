@@ -4,6 +4,7 @@ import {
   classifyFile,
   createIndex,
   extract,
+  extractTurbo,
   generateExtractSchema,
   getIndexStatus,
   getProjects,
@@ -965,6 +966,123 @@ export function registerExtractFileTool(
           };
         } catch (err) {
           logger.error(`An error occurred while extracting data: ${err}`);
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw err;
+        }
+      });
+    }
+  );
+}
+
+export function registerExtractFileTurboTool(server: McpServer) {
+  server.tool(
+    'extractFileTurbo',
+    'Extract structured data from a file in real time using the Turbo tier: one call, schema supplied inline, structured JSON back in seconds — no saved configuration step. ' +
+      'Supply either a `templateId` from `searchSchemaTemplates` or an explicit `dataSchema` JSON Schema, plus a `fileId` from the upload tools. ' +
+      'Turbo constraints: accepts only PDF, JPG and PNG; returns one object per document; produces no parse output; bills 35 credits/page. ' +
+      'Prefer this tool whenever response time is user-facing. For per_page or per_table_row extraction, other file types, or a reusable saved configuration, use `createExtractionConfigFromSchema` + `extractFile` instead.',
+    {
+      fileId: z
+        .string()
+        .describe(
+          'ID of the file to extract, as returned by the file upload tool or provided by the user. PDF, JPG and PNG only.'
+        ),
+      templateId: z
+        .string()
+        .optional()
+        .describe(
+          'ID of a starter template to use verbatim, as returned by `searchSchemaTemplates`. Provide this or `dataSchema`, not both.'
+        ),
+      dataSchema: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe(
+          'An explicit JSON Schema object describing the fields to extract. Must be an object schema with a `properties` map. Provide this or `templateId`, not both.'
+        ),
+      projectId: z
+        .string()
+        .optional()
+        .describe(
+          'Project ID that the tool should use. Uses the default project if not provided.'
+        ),
+      maxPages: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe(
+          'Maximum number of pages to process, from the start of the document. Caps cost at 35 credits/page. Omit to process every page.'
+        ),
+    },
+    {
+      title: 'Extract Structured Data (Turbo)',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan('tool.extractFileTurbo', async (span) => {
+        const { authInfo } = extra;
+        ensureUserAuthenticated(authInfo);
+        const logger = getLogger();
+        const rl = checkRateLimitedResponse(authInfo, span);
+        if (rl) return rl;
+        span.setAttribute('tool.file_id', redactFileId(args.fileId as string));
+
+        const templateId = args.templateId as string | undefined;
+        const explicitSchema = args.dataSchema as
+          | Record<string, unknown>
+          | undefined;
+        if (!templateId && !explicitSchema) {
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw new Error(
+            'Provide either templateId or dataSchema. Use searchSchemaTemplates to find a template id.'
+          );
+        }
+        if (templateId && explicitSchema) {
+          span.setAttribute('tool.error', true);
+          span.end();
+          throw new Error(
+            'Provide only one of templateId or dataSchema. To adapt a template, fetch it with getSchemaTemplate, edit it, and pass the result as dataSchema.'
+          );
+        }
+
+        let dataSchema: Record<string, unknown>;
+        if (templateId) {
+          const template = getSchemaTemplate(templateId);
+          if (!template) {
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw new Error(
+              `No schema template with id '${templateId}'. Use searchSchemaTemplates to list the available ids.`
+            );
+          }
+          dataSchema = template.schema;
+          span.setAttribute('tool.template_id', templateId);
+        } else {
+          dataSchema = explicitSchema!;
+        }
+
+        try {
+          const result = await extractTurbo({
+            token: authInfo!.token,
+            fileId: args.fileId as string,
+            projectId: args.projectId as string | undefined,
+            dataSchema,
+            maxPages: args.maxPages as number | undefined,
+          });
+          logger.info(
+            `Turbo-extracted ${redactFileId(args.fileId as string)} in job ${result.jobId}`
+          );
+          span.end();
+          return jsonResult(result);
+        } catch (err) {
+          logger.error(
+            `An error occurred while extracting data with turbo: ${err}`
+          );
           span.setAttribute('tool.error', true);
           span.end();
           throw err;
@@ -2088,6 +2206,7 @@ export function registerLlamaParseTools(server: McpServer) {
   registerCreateExtractionConfigFromSchemaTool(server);
   registerGenerateExtractionConfigTool(server);
   registerExtractFileTool(server);
+  registerExtractFileTurboTool(server);
   registerListIndexesTool(server);
   registerFindFilesInIndexTool(server);
   registerReadFileFromIndexTool(server);

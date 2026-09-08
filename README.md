@@ -17,6 +17,7 @@ Visit [our docs](https://developers.llamaindex.ai/for-agents/) to learn more, or
 | `searchSchemaTemplates` | Searches the built-in starter extraction schemas by keyword or category |
 | `getSchemaTemplate` | Returns the full JSON Schema for one starter template |
 | `createExtractionConfigFromSchema` | Creates an extraction configuration from a template id or an explicit JSON Schema, returning a configuration id for `extractFile` |
+| `extractFileTurbo` | Extracts structured data in real time with the Turbo tier: schema passed inline (template id or JSON Schema), structured JSON back in one call, no saved configuration |
 
 ### Schema templates
 

@@ -5,6 +5,7 @@ import {
   registerGetUserProjectsTool,
   registerGenerateExtractionConfigTool,
   registerExtractFileTool,
+  registerExtractFileTurboTool,
   registerSearchSchemaTemplatesTool,
   registerGetSchemaTemplateTool,
   registerCreateExtractionConfigFromSchemaTool,
@@ -23,6 +24,7 @@ const authHandler = buildMcpRouteHandler(
     registerCreateExtractionConfigFromSchemaTool(server);
     registerGenerateExtractionConfigTool(server);
     registerExtractFileTool(server);
+    registerExtractFileTurboTool(server);
   },
   '/extract',
   {
@@ -37,6 +39,8 @@ const authHandler = buildMcpRouteHandler(
       'generateExtractionConfig with a natural-language description to draft one, ' +
       '(2) upload a file via getUploadUrl and POST the file to the obtained URL, ' +
       '(3) call extractFile with the file id and the extraction config to get structured JSON. ' +
+      'For real-time extraction, skip the config step: call extractFileTurbo with the file id and ' +
+      'the schema inline (a template id or a JSON Schema) to get structured JSON back in one call. ' +
       'Use getUserProjects to discover available projects.',
   }
 );
