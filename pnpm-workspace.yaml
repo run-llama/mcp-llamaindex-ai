@@ -1,0 +1,6 @@
+# The admin SDK publishes to no registry; it installs from git and builds dist/
+# in its `prepare` script, which pnpm 10 refuses to run unless it is named here.
+# Without this the package installs with no dist/ and every import resolves to
+# nothing.
+onlyBuiltDependencies:
+  - "@llamaindex/llama-cloud-admin"

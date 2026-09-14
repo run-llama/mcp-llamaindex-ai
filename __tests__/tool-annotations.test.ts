@@ -46,6 +46,7 @@ const WRITES = [
   'addFilesToDirectory',
   'createIndex',
   'syncIndex',
+  'createProjectApiKey',
 ];
 
 async function listTools() {

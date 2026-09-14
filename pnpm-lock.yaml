@@ -14,6 +14,9 @@ importers:
       '@llamaindex/llama-cloud':
         specifier: 2.15.0
         version: 2.15.0
+      '@llamaindex/llama-cloud-admin':
+        specifier: github:run-llama/llamacloud-admin-typescript#8bd1410fdb9030b291a28bccbb53fe08bff13e60
+        version: https://codeload.github.com/run-llama/llamacloud-admin-typescript/tar.gz/8bd1410fdb9030b291a28bccbb53fe08bff13e60
       '@modelcontextprotocol/sdk':
         specifier: 1.15.0
         version: 1.15.0
@@ -607,6 +610,10 @@ packages:
   '@llamaindex/liteparse-wasm@2.10.0':
     resolution: {integrity: sha512-0/gj65OrwuBb2c4CuFFdT9Xg1b4zzjcEn2i/l/O1BobXf8Oeo+eWetMe1G44aYmLDMjihBBlXy0vbSXTYJ+efw==}
     engines: {node: '>=18.0.0'}
+
+  '@llamaindex/llama-cloud-admin@https://codeload.github.com/run-llama/llamacloud-admin-typescript/tar.gz/8bd1410fdb9030b291a28bccbb53fe08bff13e60':
+    resolution: {tarball: https://codeload.github.com/run-llama/llamacloud-admin-typescript/tar.gz/8bd1410fdb9030b291a28bccbb53fe08bff13e60}
+    version: 0.0.1
 
   '@llamaindex/llama-cloud@2.15.0':
     resolution: {integrity: sha512-cC4p3evDD3mrOjakshCqF/hq5LWcBfEyG5Lmq898PRTrJ/bL0duzZCJfmUkqVWSR5APvnuo2W5reAvyDHKUnzg==}
@@ -4058,6 +4065,8 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.5.5
 
   '@llamaindex/liteparse-wasm@2.10.0': {}
+
+  '@llamaindex/llama-cloud-admin@https://codeload.github.com/run-llama/llamacloud-admin-typescript/tar.gz/8bd1410fdb9030b291a28bccbb53fe08bff13e60': {}
 
   '@llamaindex/llama-cloud@2.15.0': {}
 

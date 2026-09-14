@@ -61,6 +61,14 @@ export default defineConfig([
               message:
                 'Construct LlamaCloud only where the region guard is applied (lib/business/*, app/api/upload). A new call site must pass baseURL: llamaCloudBaseUrl().',
             },
+            {
+              group: [
+                '@llamaindex/llama-cloud-admin',
+                '@llamaindex/llama-cloud-admin/*',
+              ],
+              message:
+                'Construct LlamaCloudAdmin only where the region guard is applied (lib/business/*). A new call site must pass baseURL: llamaCloudBaseUrl().',
+            },
           ],
         },
       ],
@@ -92,6 +100,12 @@ export default defineConfig([
             'NewExpression[callee.name="LlamaCloud"]:not(:has(ObjectExpression > Property[key.name="baseURL"]))',
           message:
             'Construct LlamaCloud with `baseURL: llamaCloudBaseUrl()`. Without it the SDK falls back to the NA API and the region guard is bypassed.',
+        },
+        {
+          selector:
+            'NewExpression[callee.name="LlamaCloudAdmin"]:not(:has(ObjectExpression > Property[key.name="baseURL"]))',
+          message:
+            'Construct LlamaCloudAdmin with `baseURL: llamaCloudBaseUrl()`. Without it the SDK falls back to the NA API and the region guard is bypassed.',
         },
       ],
     },
