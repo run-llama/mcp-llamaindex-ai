@@ -30,6 +30,7 @@ import {
   listDirectories,
   listDirectory,
 } from '@/lib/business/directories';
+import { createProjectApiKey, MAX_EXPIRY_DAYS } from '@/lib/business/api-keys';
 import { Category, SplitCategory } from '@/lib/business/types';
 import {
   fileExtension,
@@ -2194,10 +2195,81 @@ export function registerIndexTools(server: McpServer) {
 
 // Every tool, as served at /mcp.
 
+export function registerCreateProjectApiKeyTool(server: McpServer) {
+  server.tool(
+    'createProjectApiKey',
+    `Create a LlamaCloud API key scoped to one project, for handing to an application or a teammate. The key can only reach that project. The secret is returned once and cannot be retrieved again, so pass it straight to whoever needs it rather than planning to read it back. Keys expire; the longest this tool will mint is ${MAX_EXPIRY_DAYS} days.`,
+    {
+      projectId: z
+        .string()
+        .describe(
+          'Project ID the key is scoped to. Required — call getUserProjects to list the available projects and ask the user which one to use if it is not obvious.'
+        ),
+      name: z
+        .string()
+        .optional()
+        .describe(
+          'Label for the key, shown in the LlamaCloud UI. Worth setting: it is how someone later works out what a key is for before revoking it.'
+        ),
+      expiryDays: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_EXPIRY_DAYS)
+        .optional()
+        .describe(
+          `Days until the key expires. Defaults to ${MAX_EXPIRY_DAYS}, which is also the maximum.`
+        ),
+    },
+    {
+      title: 'Create Project API Key',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    async (args, extra) => {
+      return tracer.startActiveSpan(
+        'tool.createProjectApiKey',
+        async (span) => {
+          const { authInfo } = extra;
+          ensureUserAuthenticated(authInfo);
+          // No span attribute carries the key, its name, or its id: this span is
+          // the one place a credential could leak into telemetry.
+          const logger = getLogger();
+          const rl = checkRateLimitedResponse(authInfo, span);
+          if (rl) return rl;
+          try {
+            const result = await createProjectApiKey({
+              authToken: authInfo!.token,
+              projectId: args.projectId,
+              name: args.name ?? null,
+              expiryDays: args.expiryDays ?? MAX_EXPIRY_DAYS,
+            });
+            logger.info('Created a project-scoped API key');
+            span.end();
+            return jsonResult({
+              ...result,
+              message:
+                'This is the only time the secret is shown. Store it now; it cannot be read back, only revoked and replaced.',
+            });
+          } catch (err) {
+            logger.error(`An error occurred while creating an API key: ${err}`);
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw err;
+          }
+        }
+      );
+    }
+  );
+}
+
 export function registerLlamaParseTools(server: McpServer) {
   registerGetUploadUrlTool(server);
   registerUploadFileByUrlTool(server);
   registerGetUserProjectsTool(server);
+  registerCreateProjectApiKeyTool(server);
   registerParseFileTool(server);
   registerClassifyFileTool(server);
   registerSplitFileTool(server);
