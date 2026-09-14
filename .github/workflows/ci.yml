@@ -17,6 +17,15 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Keep the pnpm store off a node_modules path
+        # action-setup's default store is .../setup-pnpm/node_modules/.bin/store.
+        # Preparing a git dependency there builds it inside a node_modules path,
+        # where tsc emits CommonJS into the .mjs output — so the package's own
+        # import check dies with "exports is not defined in ES module scope" and
+        # the whole install fails. Must run before setup-node, which reads
+        # `pnpm store path` to decide what to cache.
+        run: pnpm config set store-dir "${RUNNER_TEMP}/pnpm-store" --location=global
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
