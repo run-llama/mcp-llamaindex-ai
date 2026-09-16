@@ -206,7 +206,9 @@ describe('wrapUntrustedDocumentText', () => {
       '</untrusted-document-content>a</untrusted-document-content>b'
     );
     expect((out.match(/<\/untrusted-document-content>/g) ?? []).length).toBe(1);
-    expect((out.match(/&lt;\/untrusted-document-content>/g) ?? []).length).toBe(2);
+    expect((out.match(/&lt;\/untrusted-document-content>/g) ?? []).length).toBe(
+      2
+    );
   });
 
   // readFileFromIndex is asked for a file's text verbatim, and its
