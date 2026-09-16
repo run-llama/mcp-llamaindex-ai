@@ -52,6 +52,59 @@ function privateHostsAllowed(): boolean {
  */
 const MAX_REDIRECTS = 10;
 
+// Two deadlines, not one clock over the whole call: a single budget cannot tell
+// a stalled transfer from a large one that is still arriving, and would cut both.
+const HEADERS_BUDGET_MS = 30_000;
+const BODY_IDLE_MS = 30_000;
+
+// Rejects when no chunk arrives for idleMs. A download that keeps producing
+// bytes is never interrupted, however long it runs.
+function idleBounded(response: Response, idleMs: number): Response {
+  if (!response.body) {
+    return response;
+  }
+  const reader = response.body.getReader();
+  const stalled = () =>
+    new DOMException(
+      `The response body stalled for ${idleMs}ms.`,
+      'TimeoutError'
+    );
+
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const chunk = await Promise.race([
+            reader.read(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(stalled()), idleMs);
+            }),
+          ]);
+          if (chunk.done) {
+            controller.close();
+          } else {
+            controller.enqueue(chunk.value);
+          }
+        } catch (error) {
+          await reader.cancel(error).catch(() => {});
+          controller.error(error);
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+      cancel(reason) {
+        return reader.cancel(reason);
+      },
+    }),
+    {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    }
+  );
+}
+
 function ipv4ToInt(address: string): number | undefined {
   const parts = address.split('.');
   if (parts.length !== 4) return undefined;
@@ -247,7 +300,25 @@ async function assertReachable(url: URL): Promise<void> {
  * one — a public URL answering 302 to `http://169.254.169.254/` is the same
  * attack with one extra step, and automatic following would take it.
  */
-export async function fetchRemoteFile(rawUrl: string): Promise<Response> {
+export async function fetchRemoteFile(
+  rawUrl: string,
+  headersBudgetMs: number = HEADERS_BUDGET_MS,
+  bodyIdleMs: number = BODY_IDLE_MS
+): Promise<Response> {
+  // Spans every hop: the deadline is on reaching a final response, not on each
+  // request, and it stops once the headers are in so the body is not on it.
+  const controller = new AbortController();
+  const headersTimer = setTimeout(
+    () =>
+      controller.abort(
+        new DOMException(
+          `No response headers within ${headersBudgetMs}ms.`,
+          'TimeoutError'
+        )
+      ),
+    headersBudgetMs
+  );
+  const signal = controller.signal;
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -255,18 +326,35 @@ export async function fetchRemoteFile(rawUrl: string): Promise<Response> {
     throw new BlockedUrlError(`"${rawUrl}" is not a valid URL.`);
   }
 
+  try {
+    return await followRedirects(url, rawUrl, signal, bodyIdleMs);
+  } finally {
+    clearTimeout(headersTimer);
+  }
+}
+
+async function followRedirects(
+  url: URL,
+  rawUrl: string,
+  signal: AbortSignal,
+  bodyIdleMs: number
+): Promise<Response> {
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertReachable(url);
-    const response = await fetch(url, { method: 'GET', redirect: 'manual' });
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal,
+    });
 
     const isRedirect = response.status >= 300 && response.status < 400;
     if (!isRedirect) {
-      return response;
+      return idleBounded(response, bodyIdleMs);
     }
 
     const location = response.headers.get('location');
     if (!location) {
-      return response;
+      return idleBounded(response, bodyIdleMs);
     }
     // Nothing reads a redirect's body, and an abandoned one keeps its
     // connection out of the pool until GC gets to it.
