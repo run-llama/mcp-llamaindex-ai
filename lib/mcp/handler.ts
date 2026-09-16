@@ -279,7 +279,7 @@ export function buildMcpRouteHandler(
       };
     },
     {
-      required: false,
+      required: true,
     }
   );
 
@@ -294,11 +294,10 @@ export function buildMcpRouteHandler(
     const token = bearerToken(request);
 
     // In api_key mode the challenge would name a discovery document this
-    // deployment answers with a 404, so a JWT is turned away here rather than
-    // by the verifier — the adapter attaches that pointer to every 401 it
-    // builds, and pointing a client at a document that does not exist is worse
-    // than telling it plainly what this server takes.
-    if (!oauthEnabled && token !== undefined && !isApiKeyToken(token)) {
+    // deployment answers with a 404, so anything that is not an API key — a JWT,
+    // or no credential at all — is turned away here rather than by the adapter,
+    // which attaches that pointer to every 401 it builds.
+    if (!oauthEnabled && (token === undefined || !isApiKeyToken(token))) {
       return unauthorized(
         'This deployment accepts LlamaCloud API keys only. Send one as the bearer token.'
       );

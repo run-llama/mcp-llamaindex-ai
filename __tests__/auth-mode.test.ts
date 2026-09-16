@@ -97,6 +97,18 @@ describe('a deployment serving API keys only', () => {
     expect(innerHandler).toHaveBeenCalled();
   });
 
+  it('refuses an uncredentialed session without pointing at a withdrawn document', async () => {
+    const response = await handler(
+      new Request('https://mcp.example.com/parse/mcp', { method: 'POST' })
+    );
+
+    expect(response.status).toBe(401);
+    expect(innerHandler).not.toHaveBeenCalled();
+    const challenge = response.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('Bearer');
+    expect(challenge).not.toContain('resource_metadata');
+  });
+
   it('turns a JWT away without pointing at a withdrawn document', async () => {
     const response = await handler(requestWith('a.b.c'));
 

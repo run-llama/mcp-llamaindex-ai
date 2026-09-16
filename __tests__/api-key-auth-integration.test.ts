@@ -118,6 +118,18 @@ describe('the OAuth path through the real adapter', () => {
     expect(dispatched.auth?.extra?.credential).toBe('oauth');
   });
 
+  it('refuses to open a session for a caller with no credential', async () => {
+    const response = await handler(
+      new Request('https://mcp.llamaindex.ai/parse/mcp', { method: 'POST' })
+    );
+
+    expect(response.status).toBe(401);
+    // initialize and tools/list are served by the protocol layer beneath this
+    // handler, so anything that reaches it has the whole tool catalogue.
+    expect(innerHandler).not.toHaveBeenCalled();
+    expect(response.headers.get('WWW-Authenticate')).toContain('Bearer');
+  });
+
   it('still answers a bad JWT with the OAuth challenge', async () => {
     mockJwtVerify.mockRejectedValue(
       Object.assign(new Error('bad'), { code: 'ERR_JWS_INVALID' })
