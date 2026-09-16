@@ -97,6 +97,21 @@ describe('a deployment serving API keys only', () => {
     expect(innerHandler).toHaveBeenCalled();
   });
 
+  it('refuses an uncredentialed session without pointing at a withdrawn document', async () => {
+    const response = await handler(
+      new Request('https://mcp.example.com/parse/mcp', { method: 'POST' })
+    );
+
+    expect(response.status).toBe(401);
+    expect(innerHandler).not.toHaveBeenCalled();
+    const challenge = response.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('Bearer');
+    expect(challenge).not.toContain('resource_metadata');
+    // RFC 6750 3.1: nothing was presented, so there is no token to call invalid
+    // and nothing for a client to refresh and retry with.
+    expect(challenge).not.toContain('error=');
+  });
+
   it('turns a JWT away without pointing at a withdrawn document', async () => {
     const response = await handler(requestWith('a.b.c'));
 

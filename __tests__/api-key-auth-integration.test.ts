@@ -118,6 +118,23 @@ describe('the OAuth path through the real adapter', () => {
     expect(dispatched.auth?.extra?.credential).toBe('oauth');
   });
 
+  it('refuses to open a session for a caller with no credential', async () => {
+    const response = await handler(
+      new Request('https://mcp.llamaindex.ai/parse/mcp', { method: 'POST' })
+    );
+
+    expect(response.status).toBe(401);
+    // initialize and tools/list are served by the protocol layer beneath this
+    // handler, so anything that reaches it has the whole tool catalogue.
+    expect(innerHandler).not.toHaveBeenCalled();
+    // The adapter builds this one rather than the local helper, which omits the
+    // pointer on purpose — without it a conformant client cannot find the
+    // authorization server and the refusal is a dead end.
+    const challenge = response.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('Bearer');
+    expect(challenge).toContain('resource_metadata');
+  });
+
   it('still answers a bad JWT with the OAuth challenge', async () => {
     mockJwtVerify.mockRejectedValue(
       Object.assign(new Error('bad'), { code: 'ERR_JWS_INVALID' })
