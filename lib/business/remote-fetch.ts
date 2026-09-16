@@ -52,6 +52,11 @@ function privateHostsAllowed(): boolean {
  */
 const MAX_REDIRECTS = 10;
 
+// One budget for the whole call, not per hop: ten hops that each stall are ten
+// unbounded waits. The signal stays attached to the returned body, so a stalled
+// read aborts on the same deadline as the request.
+const FETCH_BUDGET_MS = 30_000;
+
 function ipv4ToInt(address: string): number | undefined {
   const parts = address.split('.');
   if (parts.length !== 4) return undefined;
@@ -247,7 +252,11 @@ async function assertReachable(url: URL): Promise<void> {
  * one — a public URL answering 302 to `http://169.254.169.254/` is the same
  * attack with one extra step, and automatic following would take it.
  */
-export async function fetchRemoteFile(rawUrl: string): Promise<Response> {
+export async function fetchRemoteFile(
+  rawUrl: string,
+  budgetMs: number = FETCH_BUDGET_MS
+): Promise<Response> {
+  const signal = AbortSignal.timeout(budgetMs);
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -257,7 +266,11 @@ export async function fetchRemoteFile(rawUrl: string): Promise<Response> {
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertReachable(url);
-    const response = await fetch(url, { method: 'GET', redirect: 'manual' });
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal,
+    });
 
     const isRedirect = response.status >= 300 && response.status < 400;
     if (!isRedirect) {

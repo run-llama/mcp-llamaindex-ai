@@ -259,6 +259,26 @@ export function registerUploadFileByUrlTool(server: McpServer) {
         ensureUserAuthenticated(authInfo);
         const rl = checkRateLimitedResponse(authInfo, span);
         if (rl) return rl;
+        // Egress on behalf of a project the caller named happens before
+        // anything resolves it, so the entitlement check comes first.
+        if (args.projectId) {
+          const projects = await getProjects(authInfo!.token);
+          if (!projects.some((p) => p.projectId === args.projectId)) {
+            logger.warn('Refused an upload for an inaccessible project');
+            span.setAttribute('tool.error', true);
+            span.end();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: 'That project is not accessible to this caller.',
+                },
+              ],
+              isError: true,
+            } as ToolErrorResponse;
+          }
+        }
+
         let response: Response;
         try {
           response = await fetchRemoteFile(args.url);
