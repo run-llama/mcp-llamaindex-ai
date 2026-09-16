@@ -148,6 +148,18 @@ function unauthorized(description: string): Response {
   );
 }
 
+// RFC 6750 3.1: a request that carried no credential gets a bare challenge, not
+// an error code a client could read as "refresh the token and retry".
+function unauthenticated(description: string): Response {
+  return new Response(JSON.stringify({ error_description: description }), {
+    status: 401,
+    headers: {
+      'Content-Type': 'application/json',
+      'WWW-Authenticate': 'Bearer',
+    },
+  });
+}
+
 type McpServerInfo = {
   instructions: string;
   serverInfo: {
@@ -298,9 +310,11 @@ export function buildMcpRouteHandler(
     // or no credential at all — is turned away here rather than by the adapter,
     // which attaches that pointer to every 401 it builds.
     if (!oauthEnabled && (token === undefined || !isApiKeyToken(token))) {
-      return unauthorized(
-        'This deployment accepts LlamaCloud API keys only. Send one as the bearer token.'
-      );
+      const message =
+        'This deployment accepts LlamaCloud API keys only. Send one as the bearer token.';
+      return token === undefined
+        ? unauthenticated(message)
+        : unauthorized(message);
     }
 
     if (token === undefined || !isApiKeyToken(token)) {

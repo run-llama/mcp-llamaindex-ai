@@ -271,8 +271,10 @@ What changes in this mode:
 
 - The OAuth discovery documents under `/.well-known/` return **404**, because
   there is no authorization server for a client to complete a flow against.
-- A JWT is refused with a plain 401 naming the credential this deployment
-  takes, rather than a challenge pointing at those withdrawn documents.
+- A JWT — or a request carrying no credential at all — is refused with a plain
+  401 naming the credential this deployment takes, rather than a challenge
+  pointing at those withdrawn documents. A session cannot be opened
+  anonymously, so `initialize` and `tools/list` need a key like every call.
 - `getUploadUrl` is unavailable to API-key callers on any deployment — it
   stores the caller's credential so the upload route can spend it, which is
   bounded for an expiring token and not for a key. Use `uploadFileByUrl`.

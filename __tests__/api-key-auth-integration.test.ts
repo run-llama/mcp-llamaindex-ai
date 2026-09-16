@@ -127,7 +127,12 @@ describe('the OAuth path through the real adapter', () => {
     // initialize and tools/list are served by the protocol layer beneath this
     // handler, so anything that reaches it has the whole tool catalogue.
     expect(innerHandler).not.toHaveBeenCalled();
-    expect(response.headers.get('WWW-Authenticate')).toContain('Bearer');
+    // The adapter builds this one rather than the local helper, which omits the
+    // pointer on purpose — without it a conformant client cannot find the
+    // authorization server and the refusal is a dead end.
+    const challenge = response.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('Bearer');
+    expect(challenge).toContain('resource_metadata');
   });
 
   it('still answers a bad JWT with the OAuth challenge', async () => {
