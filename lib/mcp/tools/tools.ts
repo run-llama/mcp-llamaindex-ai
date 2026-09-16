@@ -105,8 +105,8 @@ function jsonResult(value: unknown): ToolTextResponse {
   };
 }
 
-// Clients gate on isError; a model reading the JSON as prose needs the refusal
-// on the first line.
+// Clients gate on isError; a model reading the result needs the refusal first.
+// The lead is its own block so the JSON one stays parseable for the identifiers.
 function outcomeResult(value: {
   added: unknown[];
   failed: unknown[];
@@ -116,15 +116,23 @@ function outcomeResult(value: {
     return jsonResult(value);
   }
   const total = value.added.length + refused;
-  const lead =
-    value.added.length === 0
-      ? `None of the ${total} items were added.`
-      : `${refused} of ${total} items were not added.`;
+  const noneAdded = value.added.length === 0;
+
+  let lead: string;
+  if (!noneAdded) {
+    lead = `${refused} of ${total} items were not added.`;
+  } else if (total === 1) {
+    lead = 'The item was not added.';
+  } else {
+    lead = `None of the ${total} items were added.`;
+  }
+
   return {
     content: [
-      { type: 'text', text: `${lead}\n${JSON.stringify(value, null, 2)}` },
+      { type: 'text', text: lead },
+      { type: 'text', text: JSON.stringify(value, null, 2) },
     ],
-    isError: value.added.length === 0,
+    isError: noneAdded,
   };
 }
 
@@ -1987,6 +1995,9 @@ export function registerAddFilesToDirectoryTool(server: McpServer) {
             );
             if (result.failed.length > 0) {
               span.setAttribute('tool.partial_failure', true);
+              if (result.added.length === 0) {
+                span.setAttribute('tool.error', true);
+              }
             }
             span.end();
             return outcomeResult(result);

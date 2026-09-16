@@ -4,6 +4,26 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 jest.mock('@llamaindex/liteparse-wasm', () => ({}), { virtual: true });
 
+const spanAttributes: Record<string, unknown> = {};
+jest.mock('@opentelemetry/api', () => {
+  const actual = jest.requireActual('@opentelemetry/api');
+  return {
+    ...actual,
+    trace: {
+      ...actual.trace,
+      getTracer: () => ({
+        startActiveSpan: (_name: string, run: (span: unknown) => unknown) =>
+          run({
+            setAttribute: (key: string, value: unknown) => {
+              spanAttributes[key] = value;
+            },
+            end: () => {},
+          }),
+      }),
+    },
+  };
+});
+
 const addFiles = jest.fn();
 jest.mock('../lib/business/directories', () => ({
   ...jest.requireActual('../lib/business/directories'),
@@ -49,7 +69,10 @@ async function callAddFiles(fileIds: string[]): Promise<ToolResult> {
   return result;
 }
 
-beforeEach(() => addFiles.mockReset());
+beforeEach(() => {
+  addFiles.mockReset();
+  for (const key of Object.keys(spanAttributes)) delete spanAttributes[key];
+});
 
 describe('addFilesToDirectory result', () => {
   it('reports a fully refused write as an error', async () => {
@@ -65,9 +88,19 @@ describe('addFilesToDirectory result', () => {
     const result = await callAddFiles(['f1', 'f2']);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]!.text.split('\n')[0]).toBe(
-      'None of the 2 items were added.'
-    );
+    expect(result.content[0]!.text).toBe('None of the 2 items were added.');
+  });
+
+  it('says so in the singular when one file was refused', async () => {
+    addFiles.mockResolvedValue({
+      directoryId: 'dir-1',
+      added: [],
+      failed: [{ fileId: 'f1', error: 'not found' }],
+    });
+
+    const result = await callAddFiles(['f1']);
+
+    expect(result.content[0]!.text).toBe('The item was not added.');
   });
 
   it('names the refused count on the first line of a partial write', async () => {
@@ -80,9 +113,37 @@ describe('addFilesToDirectory result', () => {
     const result = await callAddFiles(['f1', 'f2']);
 
     expect(result.isError).toBeFalsy();
-    expect(result.content[0]!.text.split('\n')[0]).toBe(
-      '1 of 2 items were not added.'
-    );
+    expect(result.content[0]!.text).toBe('1 of 2 items were not added.');
+    // The write tools return JSON so a caller can lift identifiers back out;
+    // a refusal must not cost that.
+    expect(JSON.parse(result.content[1]!.text).failed).toHaveLength(1);
+  });
+
+  // A trace query for tool.error would otherwise miss the very condition this
+  // marks as an error to the client.
+  it('marks the span as an error when nothing landed', async () => {
+    addFiles.mockResolvedValue({
+      directoryId: 'dir-1',
+      added: [],
+      failed: [{ fileId: 'f1', error: 'not found' }],
+    });
+
+    await callAddFiles(['f1']);
+
+    expect(spanAttributes['tool.error']).toBe(true);
+  });
+
+  it('does not mark a partial write as an error in the trace', async () => {
+    addFiles.mockResolvedValue({
+      directoryId: 'dir-1',
+      added: [{ fileId: 'f1', directoryFileId: 'd1', displayName: 'a.pdf' }],
+      failed: [{ fileId: 'f2', error: 'not found' }],
+    });
+
+    await callAddFiles(['f1', 'f2']);
+
+    expect(spanAttributes['tool.partial_failure']).toBe(true);
+    expect(spanAttributes['tool.error']).toBeUndefined();
   });
 
   it('leaves a clean write untouched', async () => {
