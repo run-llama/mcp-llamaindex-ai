@@ -105,6 +105,37 @@ function jsonResult(value: unknown): ToolTextResponse {
   };
 }
 
+// Clients gate on isError; a model reading the result needs the refusal first.
+// The lead is its own block so the JSON one stays parseable for the identifiers.
+function outcomeResult(value: {
+  added: unknown[];
+  failed: unknown[];
+}): ToolTextResponse | ToolErrorResponse {
+  const refused = value.failed.length;
+  if (refused === 0) {
+    return jsonResult(value);
+  }
+  const total = value.added.length + refused;
+  const noneAdded = value.added.length === 0;
+
+  let lead: string;
+  if (!noneAdded) {
+    lead = `${refused} of ${total} items were not added.`;
+  } else if (total === 1) {
+    lead = 'The item was not added.';
+  } else {
+    lead = `None of the ${total} items were added.`;
+  }
+
+  return {
+    content: [
+      { type: 'text', text: lead },
+      { type: 'text', text: JSON.stringify(value, null, 2) },
+    ],
+    isError: noneAdded,
+  };
+}
+
 // =====================
 // Upload tools
 // =====================
@@ -1964,9 +1995,12 @@ export function registerAddFilesToDirectoryTool(server: McpServer) {
             );
             if (result.failed.length > 0) {
               span.setAttribute('tool.partial_failure', true);
+              if (result.added.length === 0) {
+                span.setAttribute('tool.error', true);
+              }
             }
             span.end();
-            return jsonResult(result);
+            return outcomeResult(result);
           } catch (err) {
             logger.error(
               `An error occurred while adding files to a directory: ${err}`
