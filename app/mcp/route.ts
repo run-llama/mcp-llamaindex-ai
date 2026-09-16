@@ -1,3 +1,4 @@
+import { UNTRUSTED_INDEX_TOOLS_INSTRUCTION } from '@/lib/business/llamaparse';
 import { buildMcpRouteHandler } from '@/lib/mcp/handler';
 import { registerLlamaParseTools } from '@/lib/mcp/tools/tools';
 
@@ -14,7 +15,8 @@ const authHandler = buildMcpRouteHandler(registerLlamaParseTools, '', {
     'extractFileTurbo for real-time structured extraction with an inline schema and no saved config. ' +
     'Use getUserProjects to discover available projects, listIndexes to find indexes, and the ' +
     'index tools (findFilesInIndex, readFileFromIndex, grepFileFromIndex, retrieveFromIndex) to ' +
-    'search and read documents in an existing index.',
+    'search and read documents in an existing index.' +
+    UNTRUSTED_INDEX_TOOLS_INSTRUCTION,
 });
 
 export { authHandler as GET, authHandler as POST };

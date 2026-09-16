@@ -1,3 +1,4 @@
+import { UNTRUSTED_INDEX_TOOLS_INSTRUCTION } from '@/lib/business/llamaparse';
 import { buildMcpRouteHandler } from '@/lib/mcp/handler';
 import { registerIndexTools } from '@/lib/mcp/tools/tools';
 
@@ -22,7 +23,8 @@ const authHandler = buildMcpRouteHandler(registerIndexTools, '/index', {
     'uploadFileByUrl, (3) addFilesToDirectory with the returned file ids, (4) createIndex over ' +
     'that directory. Indexing is asynchronous — poll getIndexStatus until it reports ready ' +
     'before querying, and call syncIndex to pull in files added after the index was built. ' +
-    'Use getUserProjects to discover available projects.',
+    'Use getUserProjects to discover available projects.' +
+    UNTRUSTED_INDEX_TOOLS_INSTRUCTION,
 });
 
 export { authHandler as GET, authHandler as POST };
