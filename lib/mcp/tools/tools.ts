@@ -105,6 +105,29 @@ function jsonResult(value: unknown): ToolTextResponse {
   };
 }
 
+// Clients gate on isError; a model reading the JSON as prose needs the refusal
+// on the first line.
+function outcomeResult(value: {
+  added: unknown[];
+  failed: unknown[];
+}): ToolTextResponse | ToolErrorResponse {
+  const refused = value.failed.length;
+  if (refused === 0) {
+    return jsonResult(value);
+  }
+  const total = value.added.length + refused;
+  const lead =
+    value.added.length === 0
+      ? `None of the ${total} items were added.`
+      : `${refused} of ${total} items were not added.`;
+  return {
+    content: [
+      { type: 'text', text: `${lead}\n${JSON.stringify(value, null, 2)}` },
+    ],
+    isError: value.added.length === 0,
+  };
+}
+
 // =====================
 // Upload tools
 // =====================
@@ -1966,7 +1989,7 @@ export function registerAddFilesToDirectoryTool(server: McpServer) {
               span.setAttribute('tool.partial_failure', true);
             }
             span.end();
-            return jsonResult(result);
+            return outcomeResult(result);
           } catch (err) {
             logger.error(
               `An error occurred while adding files to a directory: ${err}`
