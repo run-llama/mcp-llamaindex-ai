@@ -107,3 +107,39 @@ describe('uploadFileByUrl authorization ordering', () => {
     expect(fetchRemoteFile).toHaveBeenCalled();
   });
 });
+
+describe('uploadFileByUrl timeout handling', () => {
+  it('reports a blown fetch budget as a tool error, not a thrown one', async () => {
+    const timeout = new Error('The operation was aborted due to timeout');
+    timeout.name = 'TimeoutError';
+    fetchRemoteFile.mockRejectedValue(timeout);
+
+    const result = await callUpload({
+      url: 'https://example.com/doc.pdf',
+      fileName: 'doc.pdf',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/could not be downloaded in time/);
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('reports a body read that outlives the budget the same way', async () => {
+    const timeout = new Error('The operation was aborted due to timeout');
+    timeout.name = 'TimeoutError';
+    fetchRemoteFile.mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: () => Promise.reject(timeout),
+    });
+
+    const result = await callUpload({
+      url: 'https://example.com/doc.pdf',
+      fileName: 'doc.pdf',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/could not be downloaded in time/);
+    expect(uploadFile).not.toHaveBeenCalled();
+  });
+});

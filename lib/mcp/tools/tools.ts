@@ -216,6 +216,17 @@ export function registerGetUploadUrlTool(server: McpServer) {
   );
 }
 
+// The whole call — redirects and body read — shares one deadline, so a stall
+// surfaces here rather than as a hung request.
+const TIMEOUT_MESSAGE =
+  'The file could not be downloaded in time. The URL may be slow, or the file too large to fetch within the time budget.';
+
+function isTimeout(e: unknown): boolean {
+  return (
+    e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')
+  );
+}
+
 export function registerUploadFileByUrlTool(server: McpServer) {
   server.tool(
     'uploadFileByUrl',
@@ -262,7 +273,15 @@ export function registerUploadFileByUrlTool(server: McpServer) {
         // Egress on behalf of a project the caller named happens before
         // anything resolves it, so the entitlement check comes first.
         if (args.projectId) {
-          const projects = await getProjects(authInfo!.token);
+          let projects: Awaited<ReturnType<typeof getProjects>>;
+          try {
+            projects = await getProjects(authInfo!.token);
+          } catch (e) {
+            logger.error(`Could not resolve the caller's projects: ${e}`);
+            span.setAttribute('tool.error', true);
+            span.end();
+            throw e;
+          }
           if (!projects.some((p) => p.projectId === args.projectId)) {
             logger.warn('Refused an upload for an inaccessible project');
             span.setAttribute('tool.error', true);
@@ -289,6 +308,15 @@ export function registerUploadFileByUrlTool(server: McpServer) {
             span.end();
             return {
               content: [{ type: 'text', text: e.message }],
+              isError: true,
+            } as ToolErrorResponse;
+          }
+          if (isTimeout(e)) {
+            logger.warn(`Timed out downloading a caller-supplied URL`);
+            span.setAttribute('tool.timeout', true);
+            span.end();
+            return {
+              content: [{ type: 'text', text: TIMEOUT_MESSAGE }],
               isError: true,
             } as ToolErrorResponse;
           }
@@ -338,6 +366,15 @@ export function registerUploadFileByUrlTool(server: McpServer) {
             content: { type: 'text'; text: string }[];
           };
         } catch (err) {
+          if (isTimeout(err)) {
+            logger.warn(`Timed out reading a caller-supplied URL`);
+            span.setAttribute('tool.timeout', true);
+            span.end();
+            return {
+              content: [{ type: 'text', text: TIMEOUT_MESSAGE }],
+              isError: true,
+            } as ToolErrorResponse;
+          }
           logger.error(`An error occurred while uploading file by URL: ${err}`);
           span.setAttribute('tool.error', true);
           span.end();
