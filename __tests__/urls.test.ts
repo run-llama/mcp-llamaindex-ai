@@ -221,7 +221,7 @@ describe('normalizeBaseUrl', () => {
     // These messages travel to remote MCP clients and into the log stream, and
     // an override can carry credentials in either form.
     it('never echoes a scheme-prefixed value carrying credentials', () => {
-      const secret = 'https://svc:s3cr3t@proxy.corp.internal/?tenant=acme';
+      const secret = 'https://place-svc:holder-s3cr3t@proxy.corp.internal/?tenant=acme';
       expect(() => normalizeBaseUrl(secret, V)).toThrow(
         /must not carry a query or fragment/
       );
@@ -229,7 +229,7 @@ describe('normalizeBaseUrl', () => {
     });
 
     it('never echoes a scheme-less value carrying credentials', () => {
-      const secret = 'svc:s3cr3t@proxy.corp.internal/?tenant=acme';
+      const secret = 'place-svc:holder-s3cr3t@proxy.corp.internal/?tenant=acme';
       expect(() => normalizeBaseUrl(secret, V)).not.toThrow(/s3cr3t/);
     });
   });

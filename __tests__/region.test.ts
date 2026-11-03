@@ -157,7 +157,7 @@ describe('region', () => {
     it('rejects a base url embedding credentials', () => {
       // fetch() refuses a URL with credentials and puts them in its message,
       // which is rethrown to the caller.
-      process.env.LLAMA_CLOUD_BASE_URL = `https://svc:s3cr3t@api.cloud.eu.llamaindex.ai`;
+      process.env.LLAMA_CLOUD_BASE_URL = `https://place-svc:holder-s3cr3t@api.cloud.eu.llamaindex.ai`;
       expect(() => llamaCloudBaseUrl()).toThrow(/must not embed credentials/);
       expect(() => llamaCloudBaseUrl()).not.toThrow(/s3cr3t/);
     });
@@ -280,7 +280,7 @@ describe('region', () => {
     it('rejects credentials outright rather than quoting them', () => {
       process.env.LLAMA_CLOUD_REGION = 'eu';
       process.env.LLAMA_CLOUD_BASE_URL =
-        'https://svc:s3cr3t@internal-proxy.corp.internal:8443/';
+        'https://place-svc:holder-s3cr3t@internal-proxy.corp.internal:8443/';
       expect(() => llamaCloudBaseUrl()).toThrow(/must not embed credentials/);
       expect(() => llamaCloudBaseUrl()).not.toThrow(/s3cr3t/);
     });
@@ -295,7 +295,7 @@ describe('region', () => {
     it('redacts credentials when the override carries a query', () => {
       process.env.LLAMA_CLOUD_REGION = 'eu';
       process.env.LLAMA_CLOUD_BASE_URL =
-        'https://svc:s3cr3t@proxy.corp.internal/?tenant=acme';
+        'https://place-svc:holder-s3cr3t@proxy.corp.internal/?tenant=acme';
       expect(() => llamaCloudBaseUrl()).toThrow(
         /must not carry a query or fragment/
       );
@@ -304,7 +304,7 @@ describe('region', () => {
 
     it('redacts credentials when the override does not parse', () => {
       process.env.LLAMA_CLOUD_REGION = 'eu';
-      process.env.LLAMA_CLOUD_BASE_URL = 'https://svc:s3cr3t@';
+      process.env.LLAMA_CLOUD_BASE_URL = 'https://place-svc:holder-s3cr3t@';
       expect(() => llamaCloudBaseUrl()).toThrow(/is not a valid URL/);
       expect(() => llamaCloudBaseUrl()).not.toThrow(/s3cr3t/);
     });
